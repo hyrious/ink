@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<title>Stroke Test</title>
+
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; }
+.container {
+  position: absolute;
+  inset: 50px 100px;
+  border: 1px solid;
+}
+svg {
+  display: block; width: 100%; height: 100%; touch-action: none;
+}
+g,
+path {
+  pointer-events: none;
+}
+.top-left, .top-right {
+  display: flex; align-items: center;
+  position: absolute; inset: 15px auto auto 25px; font-family: monospace;
+  line-height: 1.25;
+}
+.top-right {
+  inset: 15px 25px auto auto;
+}
+#style {
+  display: inline-flex;
+  align-items: center;
+}
+#log {
+  opacity: .5;
+  pointer-events: none;
+}
+.g_points {
+  display: none;
+}
+.points .g_points {
+  display: revert;
+}
+.points #g { fill: rgba(0, 0, 0, .1); }
+</style>
+
+<div class="container"><svg id="target" fill-rule="nonzero"><g id="g"></g></svg></div>
+<div class="top-left">
+  <samp id="predict">predict.length = 0</samp>
+  <samp id="size_label">, size = 8</samp>&nbsp;
+  <input id="size" type="range" min="1" max="64" value="8">
+  <samp>, </samp>
+  <span id="style">
+    <label><input type="radio" name="fill" value="fill" checked>fill</label>
+    <label><input type="radio" name="fill" value="stroke">stroke</label>
+  </span>
+  <samp>, </samp>
+  <label><input id="points" type="checkbox">points</label>
+  <samp>, </samp>&nbsp;
+  <a id="clear" href="javascript:void clear()">clear</a>
+</div>
+<div class="top-right">
+  <samp id="camera">tx = 0, ty = 0, scale = 100.00%</samp>&nbsp;
+  <a id="camera_reset" href="javascript:void reset_camera()">reset</a>
+</div>
+<pre id="log" style="z-index: -1;"></pre>
+
+<script type="module">
+let svg = document.getElementById('target')
+let g = document.getElementById('g')
+let camera = document.getElementById('camera')
+let camera_reset = document.getElementById('camera_reset')
+let $size = document.getElementById('size')
+let size_label = document.getElementById('size_label')
+let $log = document.getElementById('log')
+let $style = document.getElementById('style')
+let $points = document.getElementById('points')
+let $g_points = null
+let $clear = document.getElementById('clear')
+
+const query = new URLSearchParams(location.search)
+const DEBUG = query.has('debug')
+if (!DEBUG) $log.style.display = 'none'
+
+$size.oninput = () => {
+  size_label.textContent = `, size = ${$size.value}`
+  history.pushState(null, "", '?size=' + $size.value)
+}
+$size.value = Number(query.get('size') || '8')
+size_label.textContent = `, size = ${$size.value}`
+
+$style.oninput = () => $style.querySelectorAll('input[type=radio]').forEach(i => {
+  if (i.checked) switch (i.value) {
+    case 'fill':
+      g.removeAttribute('fill')
+      g.removeAttribute('stroke')
+      g.removeAttribute('stroke-width')
+      break
+    case 'stroke':
+      g.setAttribute('fill', 'none')
+      g.setAttribute('stroke', 'currentColor')
+      g.setAttribute('stroke-width', '1')
+      break
+  }
+})
+
+$points.oninput = () => svg.classList.toggle('points')
+$clear.onclick = e => {
+  e.preventDefault()
+  $log.textContent = ''
+  if ($g_points) { $g_points.remove(); $g_points = null }
+  g.textContent = ''
+}
+
+let tx = 0
+let ty = 0
+let scale = 1
+svg.addEventListener('wheel', e => {
+  e.preventDefault()
+  e.stopPropagation()
+
+  if (e.ctrlKey) {
+    let prev_scale = scale
+    // 缩放中心点
+    rect ||= svg.getBoundingClientRect()
+    let x = (e.clientX - rect.left - tx) / scale
+    let y = (e.clientY - rect.top - ty) / scale
+
+    scale *= Math.exp(-e.deltaY * 0.01)
+    scale = Math.min(Math.max(0.125, scale), 4)
+
+    tx += (x * (prev_scale - scale))
+    ty += (y * (prev_scale - scale))
+  } else {
+    tx -= e.deltaX
+    ty -= e.deltaY
+  }
+  refresh_camera()
+}, { passive: false })
+
+camera_reset.onclick = e => {
+  e.preventDefault()
+  tx = ty = 0
+  scale = 1
+  refresh_camera()
+}
+
+const refresh_camera = () => {
+  // must using high precision
+  g.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`
+  camera.textContent = `tx = ${tx.toFixed(2)}, ty = ${ty.toFixed(2)}, scale = ${(scale * 100).toFixed(2)}%`
+}
+
+let pred = document.getElementById('predict')
+let path = null, predict = null, $path = null, rect = null, scheduled = false
+let predict_ = null, finish_d = null
+
+const path_push = (x_, y_) => {
+  if (path == null) return
+  let x = (x_ - tx) / scale
+  let y = (y_ - ty) / scale
+  path.push({ x, y })
+}
+
+const predict_push = (x_, y_) => {
+  if (predict == null) return
+  let x = (x_ - tx) / scale
+  let y = (y_ - ty) / scale
+  predict.push({ x, y })
+}
+
+const render = () => {
+  scheduled = false
+  if (path == null || $path == null || path.length < 2) return
+
+  const size = +$size.value
+
+  const uni = ({ x, y }) => {
+    const d = Math.hypot(x, y)
+    return { x: x / d, y: y / d }
+  }
+  const add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y });
+  const sub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+  const mul = (a, n) => ({ x: a.x * n, y: a.y * n });
+  const per = ({ x, y }) => ({ x: y, y: -x });
+  const neg = ({ x, y }) => ({ x: -x, y: -y });
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  // rotate [p] around [C] in radius [r]
+  const rot = ({ x, y }, C, r) => {
+    const s = Math.sin(r), c = Math.cos(r)
+    const px = x - C.x, py = y - C.y
+    const nx = px * c - py * s
+    const ny = px * s + py * c
+    return { x: nx + C.x, y: ny + C.y }
+  }
+  // dot product
+  const dpr = (a, b) => a.x * b.x + a.y * b.y
+  // A->B at t
+  const lerp = (a, b, t) => add(a, mul(sub(b, a), t))
+  // A + B * c
+  const proj = (a, b, c) => add(a, mul(b, c))
+  const M = ({ x, y }) => `M${x.toFixed(2)},${y.toFixed(2)}`;
+  const L = ({ x, y }) => `L${x.toFixed(2)},${y.toFixed(2)}`;
+  const Q = (c, { x, y }) => `Q${c.x.toFixed(2)},${c.y.toFixed(2)} ${x.toFixed(2)},${y.toFixed(2)}`;
+
+  // 简单二阶贝塞尔
+  const make_bezier = (prev) => {
+    let d = M(prev), i = 1;
+    const push = (curr) => {
+      if (i) d += L(mid(prev, curr))
+      d += Q(prev, mid(prev, curr))
+      i = 0
+      prev = curr
+    }
+    const done = (curr) => d + L(curr)
+    // push(1...n-th points)
+    // done(the n-th point), i.e. the last point need to be called twice
+    return { push, done }
+  }
+
+  // 简单 perfect freehand
+  // TODO: 这是个在线算法，可以利用中间信息优化渲染性能
+  const make_d = (prev) => {
+    // const t = 0.5 // streamline factor, 0.5 = mid
+    let points = [{
+      p: prev,           // point
+      r: 0.5,            // pressure = 0.5 for simulated
+      v: { x: 1, y: 1 }, // vector = prev - curr, the first point is dummy
+      d: 0,              // distance = hypot(prev, curr)
+      l: 0,              // running length = sum(distance)
+    }]
+
+    let l = 0
+    let outlines = []
+    let g_cache = ''
+
+    const push = (curr) => {
+      const p = mid(prev, curr)
+      const d = Math.hypot(p.x - prev.x, p.y - prev.y)
+      l += d
+
+      // 过滤掉相近点，其中近定义为两点距离 < 半径
+      // TODO: 这里半径估算为 size / 4 (因为压力是 0.5)，实际可以通过在线算法得到实际半径
+      if (l - points.at(-1).l < size / 4) return
+
+      points.push({ p, r: 0.5, v: uni(sub(prev, p)), d, l })
+      prev = p
+
+      // 如果最后三个点构成锐角，从倒数第二个点切开形成两条闭合线以避免折角问题
+      if (points.length >= 3) {
+        const last1 = points.at(-1), last2 = points.at(-2)
+        const isLast2SharpCorner = dpr(last1.v, last2.v) < 0
+        if (isLast2SharpCorner) {
+          // done(...last2), points = [last2, last1, ...]
+          points.pop()
+          prev = last2.p
+          outlines.push(done(last2.p, false))
+          points = [last2, last1]
+          prev = last1.p
+
+          if ($g_points) {
+            g_cache += $g_points.innerHTML.replaceAll('>', ' stroke="green" stroke-width="1">')
+          }
+        }
+        // TODO: 做了这一步之后下面 done() 里的折角处理就几乎碰不上了，可以删掉
+      }
+    }
+
+    const thinning = (p, t) => { p.r = Math.max(0.1, p.r - t) }
+
+    const done = (p, finish = true) => {
+      const d = Math.hypot(p.x - prev.x, p.y - prev.y)
+      if (d > size / 4) {
+        l += d
+        points.push({ p, r: 0.5, v: uni(sub(prev, p)), d, l })
+      }
+      if (points.length < 2) return ''
+
+      // assume the first 2 points' direction is the same: >o-->o
+      if (points.length > 1) { points[0].v = points[1].v }
+
+      // 如果是结尾，让最后两个点变细
+      if (finish && points.length >= 2) {
+        thinning(points.at(-1), 0.4)
+        thinning(points.at(-2), 0.2)
+      }
+
+      // Now we have all points, compute the outline polygon
+      const PI = Math.PI + 0.0001
+      const PRESSURE_CHANGE_SPEED = 0.3
+
+      const leftPoints = []
+      const rightPoints = []
+
+      let radius = size
+      let prevPressure = points[0].r
+      let prevVector = points[0].v
+
+      // previous points
+      let pl = points[0].p
+      let pr = pl
+
+      let isPrevPointSharpCorner = false
+
+      for (let i = 0; i < points.length; i++) {
+        const { p, r, v, d, l } = points[i]
+        // pressure changing speed
+        const sp = Math.min(1, d / size)
+        // pressure changing rate
+        const rp = Math.min(1, 1 - sp)
+        // simulated pressure
+        const pressure = Math.min(1, prevPressure + (rp - prevPressure) * (sp * PRESSURE_CHANGE_SPEED))
+
+        radius = size * (0.5 * pressure)
+
+        const nextVector = (i < points.length - 1 ? points[i + 1] : points[i]).v
+        const nextDpr = i < points.length - 1 ? dpr(v, nextVector) : 1
+        const prevDpr = dpr(v, prevVector)
+
+        const isPointSharpCorner = prevDpr < 0 && !isPrevPointSharpCorner
+        const isNextPointSharpCorner = nextDpr < 0
+
+        // if (isPointSharpCorner || isNextPointSharpCorner) {
+        //   const offset = mul(per(prevVector), radius)
+
+        //   for (let step = 1 / 13, t = 0; t <= 1; t += step) {
+        //     pl = rot(sub(p, offset), p, PI * t)
+        //     leftPoints.push(pl)
+        //     pr = rot(add(p, offset), p, PI * -t)
+        //     rightPoints.push(pr)
+        //   }
+
+        //   if (isNextPointSharpCorner) {
+        //     isPrevPointSharpCorner = true
+        //   }
+        //   continue
+        // }
+
+        isPrevPointSharpCorner = false
+
+        // if (i === points.length - 1) {
+        //   const offset = mul(per(v), radius)
+        //   leftPoints.push(sub(p, offset))
+        //   rightPoints.push(add(p, offset))
+        //   continue
+        // }
+
+        const offset = mul(per(lerp(nextVector, v, nextDpr)), radius)
+
+        pl = sub(p, offset)
+        leftPoints.push(pl)
+
+        pr = add(p, offset)
+        rightPoints.push(pr)
+
+        prevPressure = r
+        prevVector = v
+      }
+
+      const startCap = []
+      for (let step = 1 / 13, t = step; t <= 1; t += step) {
+        startCap.push(rot(rightPoints[0], points[0].p, PI * t))
+      }
+      // No end cap since we already set a thin end.
+      // 「切断」情况下，画一个圆润的结尾
+      const endCap = []
+      if (!finish) {
+        const lastPoint = points.at(-1)
+        const direction = per(neg(lastPoint.v))
+        const start = proj(lastPoint.p, direction, radius)
+        for (let step = 1 / 13, t = step; t < 1; t += step) {
+          endCap.push(rot(start, lastPoint.p, PI * t))
+        }
+      }
+
+      const outline = leftPoints.concat(endCap, rightPoints.reverse(), startCap)
+      const bezier = make_bezier(outline[0])
+      for (let i = 1; i < outline.length; ++i) bezier.push(outline[i])
+
+      // Add visual points (input and outline)
+      if ($g_points) {
+        $g_points.textContent = ''
+        for (const p of points) {
+          const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+          c.setAttribute('cx', p.p.x + '')
+          c.setAttribute('cy', p.p.y + '')
+          c.setAttribute('r', p.r * size / 4)
+          $g_points.append(c)
+        }
+        for (const p of outline) {
+          const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
+          c.setAttribute('cx', p.x + '')
+          c.setAttribute('cy', p.y + '')
+          c.setAttribute('r', '2')
+          c.setAttribute('stroke', 'blue')
+          $g_points.append(c)
+        }
+      }
+
+      const str = bezier.done(outline.at(-1))
+
+      return finish ? outlines.join('') + str : str
+    }
+
+    let finished = false
+    const finish = () => {
+      if (finished) return
+      finished = scheduled = true
+      queueMicrotask(render)
+      predict_ = predict?.slice(0, 1)
+      predict = null
+      if ($g_points)
+        $g_points.innerHTML = g_cache + $g_points.innerHTML
+    }
+
+    return { push, done, finish }
+  }
+
+  let d = make_d(path[0]), last = path.length - 1
+  finish_d = d.finish
+
+  try {
+    for (let i = 1; i <= last; i++) {
+      d.push(path[i])
+    }
+
+    if (predict_ == null || predict_.length == 0) {
+      d = d.done(path[last])
+    } else {
+      last = predict_.length - 1
+      for (let i = 0; i <= last; i++) {
+        d.push(predict_[i])
+      }
+      d = d.done(predict_[last])
+    }
+  } catch (err) {
+    document.body.appendChild(document.createElement('pre')).textContent = err + ''
+    console.error(err)
+  }
+
+  $path.setAttribute('d', d)
+  pred.textContent = `predict.length = ${predict ? predict.length : 0} (${predict_ ? predict_.length : 0})`
+}
+
+svg.onpointerdown = e => {
+  e.preventDefault()
+  e.stopPropagation()
+  $log.textContent = `down ${e.pointerType}[${e.pointerId}]\n`;
+  // if (!e.isPrimary) return
+  svg.setPointerCapture(e.pointerId)
+  // 假设 bounding rect 在画图过程中不会随意改变，这样可以防止 pointermove 里面频繁 measure
+  rect = svg.getBoundingClientRect()
+  path = []
+  predict_ = null
+  $path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  if ($g_points) $g_points.remove()
+  $g_points = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+  $g_points.setAttribute('class', 'g_points')
+  $g_points.setAttribute('fill', 'none')
+  $g_points.setAttribute('stroke', 'red')
+  $g_points.setAttribute('stroke-width', '1')
+  g.append($path, $g_points)
+}
+
+let lastX = -1, lastY = -1
+svg.onpointermove = e => {
+  e.preventDefault()
+  e.stopPropagation()
+  if (path == null) return
+
+  // 过滤掉相同点，可能是 apple pencil 的 bug
+  if (lastX === e.clientX && lastY === e.clientY) return
+  lastX = e.clientX
+  lastY = e.clientY
+
+  $log.append(`move ${e.pointerType}[${e.pointerId}] (${e.clientX|0},${e.clientY|0},${e.pressure})\n`);
+
+  // 如果有，拿最精确的点
+  if (e.getCoalescedEvents) {
+    e.getCoalescedEvents().forEach(e => {
+      let x = e.clientX - rect.left
+      let y = e.clientY - rect.top
+      path_push(x, y)
+    })
+  }
+  // 否则拿普通事件
+  else {
+    let x = e.clientX - rect.left
+    let y = e.clientY - rect.top
+    path_push(x, y)
+  }
+  // TODO: 这里可以对 path 做一层简单去抖处理，例如
+  // - O(n) 删除重复 / 太近的点，但是要注意保留点数量代表的线宽信息
+  // - O(k) 维护一个有限长度队列，取前 k 个点的平均，类似 SAI 抖动修正的效果
+  // 以上都是增量算法，渲染时大概率不需要重绘整个 path
+
+  // 如果有，拿预测事件
+  if (e.getPredictedEvents) {
+    predict = []
+    e.getPredictedEvents().forEach(e => {
+      let x = e.clientX - rect.left
+      let y = e.clientY - rect.top
+      predict_push(x, y)
+    })
+  }
+  // 否则清空预测点
+  else {
+    predict = null
+  }
+
+  // 下一微任务渲染
+  if (scheduled) return
+  scheduled = true
+  queueMicrotask(render)
+}
+
+svg.onpointercancel = () => {
+  path = predict = predict_ = null
+  if ($path == null) return
+  $path.remove()
+  $path = null
+}
+
+svg.onpointerup = svg.onpointerout = e => {
+  finish_d && finish_d()
+  $log.append(`${e.type} ${e.pointerType}[${e.pointerId}]\n`);
+  queueMicrotask(() => {
+    $path = path = predict = null
+    if ($g_points) { g.append($g_points); $g_points = null }
+  })
+}
+
+svg.ontouchstart = svg.ontouchmove = svg.ontouchend = svg.ontouchcancel = e => {
+  e.preventDefault()
+  e.stopPropagation()
+}
+
+// document.addEventListener('gesturestart', e => e.preventDefault())
+// document.addEventListener('gesturechange', e => e.preventDefault())
+// document.addEventListener('gestureend', e => e.preventDefault())
+</script>
