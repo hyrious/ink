@@ -1,0 +1,18 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  padding: 8px;
+}
+h1,
+h2 {
+  margin: 0;
+  font-family: monospace;
+}
+svg,
+canvas {
+  border: 1px solid;
+  width: 80vw;
+  height: 40vh;
+}

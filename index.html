@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Ink (Early Tests)</title>
+    <link rel="stylesheet" href="./test/style.css" />
+  </head>
+  <body>
+    <blockquote id="not-chrome" style="display: none">
+      Note: Firefox has an issue with wacom tablet on windows --
+      <a href="https://bugzilla.mozilla.org/show_bug.cgi?id=1583480">
+        bug 1583480
+      </a>
+    </blockquote>
+    <section>
+      <h2>SVG based</h2>
+      <svg id="svg" fill="none" stroke="currentColor" stroke-width="2"></svg>
+      <script type="module" src="./test/svg.mjs?id=svg"></script>
+    </section>
+    <section>
+      <h2>Canvas based</h2>
+      <canvas id="canvas"></canvas>
+      <script type="module" src="./test/canvas.mjs?id=canvas"></script>
+    </section>
+  </body>
+</html>
