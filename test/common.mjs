@@ -10,3 +10,10 @@ const is_chrome =
 if (!is_chrome) {
   document.getElementById("not-chrome").style.display = "";
 }
+
+if (typeof navigator < "u" && navigator.serviceWorker)
+  navigator.serviceWorker.getRegistrations().then((rs) => {
+    rs.forEach((r) => {
+      r.unregister();
+    });
+  });
