@@ -10,11 +10,13 @@
     html { height: 100%; }
     body { margin: 0; height: 100%; }
     #app { height: 100%; }
-    #settings { position: fixed; inset: 0 auto auto 0; padding: 20px;
+    #settings { position: fixed; inset: 0 0 auto 0; padding: 20px;
                 display: flex; align-items: center; gap: 5px;
                 user-select: none; -webkit-user-select: none; }
+    .splitter { flex: 1 }
+    #data { font-variant-numeric: tabular-nums; }
   </style>
-  <script type="module" crossorigin src="./assets/index-DAdLLpOl.js"></script>
+  <script type="module" crossorigin src="./assets/index-CnxfSkby.js"></script>
 </head>
 <body>
   <div id="app"></div>
@@ -26,6 +28,8 @@
     <button id="redo" disabled>Redo</button>
     <input id="outline" type="checkbox">
     <label for="outline">Outline</label>
+    <span class="splitter"></span>
+    <span id="data">Data: 0 B</span>
   </div>
 </body>
 </html>
