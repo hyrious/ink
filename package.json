@@ -5,7 +5,10 @@
   "description": "Draw perfect pressure-sensitive freehand strokes.",
   "author": "hyrious <hyrious@outlook.com>",
   "license": "MIT",
-  "repository": "hyrious/ink",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hyrious/ink.git"
+  },
   "keywords": [
     "ink",
     "draw",
@@ -18,11 +21,11 @@
   "main": "dist/ink.js",
   "types": "dist/ink.d.ts",
   "files": [
-    "dist",
-    "src"
+    "dist"
   ],
   "scripts": {
     "build": "node build.js",
+    "build-website": "vite build",
     "dev": "vite"
   },
   "devDependencies": {
