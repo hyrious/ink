@@ -47,17 +47,23 @@ $svg.onpointermove = (ev) => {
   if (strokes[ev.pointerId]) {
     let [stroke, _path, x_, y_] = strokes[ev.pointerId]
 
-    // Apple pencil's bug, it fires 2 identical events
+    // Apple pencil's bug, it fires 2 identical events.
+    // For pressure-change-only events, it seems chrome will emit a point that slightly changes position (x+1).
+    // So this workaround does not cause other issues.
     if (x_ == ev.clientX && y_ == ev.clientY) return;
     strokes[ev.pointerId][2] = ev.clientX
     strokes[ev.pointerId][3] = ev.clientY
 
+    // Firefox sometimes give 0 to mousemove events, fix them to 0.5.
+    let pressure: number | undefined
+    if (ev.pointerType === 'mouse' && pressure == 0) pressure = 0.5
+
     // @ts-ignore
     if (ev.getCoalescedEvents) ev.getCoalescedEvents().forEach(e => {
-      stroke.push({ x: e.clientX - rect.left, y: e.clientY - rect.top, r: e.pressure })
+      stroke.push({ x: e.clientX - rect.left, y: e.clientY - rect.top, r: pressure ?? e.pressure })
     })
     else {
-      stroke.push({ x: ev.clientX - rect.left, y: ev.clientY - rect.top, r: ev.pressure })
+      stroke.push({ x: ev.clientX - rect.left, y: ev.clientY - rect.top, r: pressure ?? ev.pressure })
     }
     dirty[ev.pointerId] = true
 
@@ -90,12 +96,13 @@ $svg.onpointerup = $svg.onpointerout = (ev) => {
       stroke.push({
         x: Math.round(e.clientX - rect.left),
         y: Math.round(e.clientY - rect.top),
-        r: e.pressure,
+        r: Math.max(e.pressure, 0.1),
       })
       dirty[e.pointerId] = true
       render()
     }
-    else if (stroke.dot || stroke.empty) {
+    // If this stroke is too small to be seen, remove it
+    else if (stroke.empty) {
       $path.remove()
     }
     console.log(stroke)

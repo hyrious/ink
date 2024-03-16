@@ -128,7 +128,11 @@ export class Stroke {
       }
       let prev = prev_.p, d = Math.hypot(curr.x - prev.x, curr.y - prev.y);
       this.updateLength(d)
-      if (this.length - prev_.l < C.SkipDistance) return
+      if (this.length - prev_.l < C.SkipDistance) {
+        // Skip this point, but preserve its pressure.
+        (prev_ as { r: number }).r = Math.max(prev_.r, curr.r)
+        return
+      }
       points.push(new Point(curr, curr.r, norm(sub(prev, curr)), d, this.length))
       if (!skip_sections) this.updateSections()
     }
@@ -147,9 +151,9 @@ export class Stroke {
     if (points.length > 1) {
       let leftPoints: Vec[] = [], rightPoints: Vec[] = [], len = points.length,
           radius = size, prevPressure = points[0].r, drawEndCap = true
-      // If `end` is `undefined`, this is the final section.
-      // In that case draw a thinner tail when possible.
-      if (end == null && points[len - 1].d > C.TailDistance * size) {
+      // If `end` is `undefined`, this is the final section. Draw a thinner tail when possible.
+      // The precisely comparing to `0.5` is probably a mouse event (i.e. no real pressure).
+      if (end == null && points[len - 1].r == 0.5 && points[len - 1].d > C.TailDistance * size) {
         if (len - 1 >= 0) points[len - 1] = points[len - 1].dup(Math.max(0.1, points[len - 1].r - 0.4))
         if (len - 2 >= 0) points[len - 2] = points[len - 2].dup(Math.max(0.1, points[len - 2].r - 0.2))
         drawEndCap = false
@@ -258,7 +262,11 @@ export class Stroke {
       for (let i = 1; i < raw.length; i++) {
         let curr = raw[i], d = Math.hypot(curr.x - prev.x, curr.y - prev.y)
         l += d
-        if (l - ll < C.SkipDistance) continue;
+        if (l - ll < C.SkipDistance) {
+          // Skip this point and keep pressure.
+          (points[points.length - 1] as { r: number }).r = curr.r
+          continue;
+        }
         points.push(new Point(curr, curr.r, norm(sub(prev, curr)), d, l))
         prev = curr
         ll = l
