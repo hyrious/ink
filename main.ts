@@ -45,7 +45,10 @@ let undoStack = {
     this.stack[this.index] = { undo, redo }
     this.index += 1
     // Max 20 steps.
-    while (this.stack.length > 20) this.stack.shift()
+    while (this.stack.length > 20) {
+      this.stack.shift()
+      this.index -= 1
+    }
     // Clear all redos.
     this.stack.length = this.index
     this.update()
