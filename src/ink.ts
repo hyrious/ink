@@ -21,7 +21,7 @@ const enum C {
   // Simulate pressure for mouse and trackpad.
   PressureChangeSpeed = 0.3,
   // Approximate ratio that multiplies `size` to draw a dot.
-  DotSize = 0.4125,
+  DotSize = 0.36,
   // Minimal stroke width / 2.
   MinRadius = 0.75,
 }
@@ -217,7 +217,8 @@ export class Stroke {
   /// @internal Update `sections` incrementally using current `points`.
   private updateSections() {
     let { sections } = this;
-    for (let i = sections.length > 1 ? (sections[sections.length-1] + C.CoolingDown) : 1,
+    // The first 2 points share the same vector, skip them.
+    for (let i = sections.length > 1 ? (sections[sections.length-1] + C.CoolingDown) : 2,
              len = this.points.length; i < len; i++) {
       if (this.points[i].d < C.MinDistance &&
           dot(this.points[i].v, this.points[i-1].v) < 0) {
