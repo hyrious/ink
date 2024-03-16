@@ -1,25 +1,88 @@
-import { Stroke } from './src/ink'
-import { type Vec } from './src/vec'
+import { Stroke, type Vec } from './src/ink'
 
 let $root = document.getElementById('app')!
 let $svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
 let $g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
 let $settings = {
   size: document.getElementById('stroke-size') as HTMLInputElement,
+  clear: document.getElementById('clear') as HTMLButtonElement,
+  undo: document.getElementById('undo') as HTMLButtonElement,
+  redo: document.getElementById('redo') as HTMLButtonElement,
+  outline: document.getElementById('outline') as HTMLInputElement,
+}
+
+let undoStack = {
+  index: 0,
+  // Suppose we have committed 2 strokes:
+  //
+  //   stack = [delete_stroke_1, delete_stroke_2]
+  //                                            ^ index = 2
+  // Now call `undo()`, what happens is index--:
+  //
+  //   stack = [delete_stroke_1, restore_stroke_2]
+  //                           ^ index = 1
+  //                             ^^^^^^^^^^^^^^^^ replace the undo() with redo()
+  stack: [],
+  get undoable(): boolean { return this.index > 0 },
+  get redoable(): boolean { return this.index < this.stack.length },
+  commit(undo: () => void, redo: () => void) {
+    this.stack[this.index] = { undo, redo }
+    this.index += 1
+    // Clear all redos.
+    this.stack.length = this.index
+    this.update()
+  },
+  undo() {
+    if (this.undoable) {
+      this.index -= 1
+      this.stack[this.index].undo()
+      this.update()
+    }
+  },
+  redo() {
+    if (this.redoable) {
+      this.stack[this.index].redo()
+      this.index += 1
+      this.update()
+    }
+  },
+  update() {
+    $settings.undo.disabled = !this.undoable
+    $settings.redo.disabled = !this.redoable
+  },
 }
 
 $svg.append($g)
 $root.append($svg)
 
+$settings.clear.onclick = () => {
+  let current = Array.from($g.children)
+  $g.textContent = ''
+  undoStack.commit(
+    () => $g.append(...current),
+    () => $g.textContent = '',
+  )
+}
+
+$settings.undo.onclick = () => undoStack.undo()
+$settings.redo.onclick = () => undoStack.redo()
+
 let rect: DOMRect
 
 $g.setAttribute('fill', 'currentColor')
-// $g.setAttribute('fill', 'none')
-// $g.setAttribute('stroke', 'currentColor')
-// $g.setAttribute('stroke-width', '1')
+$settings.outline.oninput = () => {
+  let outline = $settings.outline.checked
+  if (outline) {
+    $g.setAttribute('fill', 'none')
+    $g.setAttribute('stroke', 'currentColor')
+    $g.setAttribute('stroke-width', '1')
+  } else {
+    $g.setAttribute('fill', 'currentColor')
+  }
+}
 
 $svg.setAttribute('fill-rule', 'nonzero')
-$svg.style.cssText = 'display: block; width: 100%; height: 100%; font-size: 0; touch-action: none; position: relative'
+$svg.style.cssText = 'display: block; width: 100%; height: 100%; font-size: 0; touch-action: none; position: relative; contain: content'
 
 let scheduled = false
 let strokes = { __proto__: null } as { [id: number]: [s: Stroke, p: SVGPathElement, x: number, y: number, pred?: PointerEvent | null] }
@@ -92,6 +155,7 @@ $svg.onpointerup = $svg.onpointerout = (ev) => {
   ev.stopPropagation()
   if (strokes[ev.pointerId]) {
     let [stroke, $path, x_, y_, e] = strokes[ev.pointerId]
+    let commit = true
     if (e && (e.clientX != x_ || e.clientY != y_)) {
       stroke.push({
         x: Math.round(e.clientX - rect.left),
@@ -104,9 +168,17 @@ $svg.onpointerup = $svg.onpointerout = (ev) => {
     // If this stroke is too small to be seen, remove it
     else if (stroke.empty) {
       $path.remove()
+      commit = false
     }
     console.log(stroke)
     delete strokes[ev.pointerId]
+    if (commit) {
+      undoStack.commit(
+        () => $path.remove(),
+        // The z-index is not correct, but this demo does not care about it.
+        () => $g.append($path),
+      )
+    }
   }
 }
 
