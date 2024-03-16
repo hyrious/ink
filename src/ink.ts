@@ -1,5 +1,7 @@
 import { add, dot, lerp, mul, neg, norm, per, proj, rot, sub, type Vec } from './vec'
 
+export type { Vec }
+
 // Internal constants, I don't plan to expose them as options.
 const enum C {
   // SAI-like input smoothing strategy: keep a queue of points
@@ -251,20 +253,10 @@ export class Stroke {
   static create(raw: RawPoint[] = []): Stroke {
     let points: Point[] = [], ll = 0
     if (raw.length > 0) {
-      let prev = raw[0], l = 0, fake = { queue: [] }
+      let prev = raw[0], l = 0
       points.push(new Point(prev, prev.r, { x: 1, y: 1 }, 0, 0))
       for (let i = 1; i < raw.length; i++) {
-        let p = raw[i], curr: RawPoint
-        // @ts-ignore No smoothing, get the raw input.
-        if (C.Smoothing == 0) curr = p
-        // @ts-ignore Level-1 smoothing, get the center of each segment.
-        else if (C.Smoothing == 1)
-          curr = { x: (p.x + prev.x) / 2, y: (p.y + prev.y) / 2, r: p.r }
-        // Level-N smoothing
-        else {
-          curr = Stroke.prototype.updateCurr.call(fake, p, C.Smoothing + 1)
-        }
-        let d = Math.hypot(curr.x - prev.x, curr.y - prev.y)
+        let curr = raw[i], d = Math.hypot(curr.x - prev.x, curr.y - prev.y)
         l += d
         if (l - ll < C.SkipDistance) continue;
         points.push(new Point(curr, curr.r, norm(sub(prev, curr)), d, l))
