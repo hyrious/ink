@@ -9,6 +9,22 @@ let $settings = {
   undo: document.getElementById('undo') as HTMLButtonElement,
   redo: document.getElementById('redo') as HTMLButtonElement,
   outline: document.getElementById('outline') as HTMLInputElement,
+  data: document.getElementById('data') as HTMLElement,
+}
+
+let total = 0
+function updateData(stroke: Stroke) {
+  try {
+    let bytes = JSON.stringify(stroke.toJSON()).length
+    total += bytes
+    $settings.data.textContent = `${prettyBytes(bytes)} (Total: ${prettyBytes(total)})`
+  } catch (err) {
+    console.error(err)
+  }
+}
+
+function prettyBytes(n: number) {
+  return n < 1024 ? n + ' B' : (n / 1024).toFixed(1) + ' kB'
 }
 
 let undoStack = {
@@ -28,6 +44,8 @@ let undoStack = {
   commit(undo: () => void, redo: () => void) {
     this.stack[this.index] = { undo, redo }
     this.index += 1
+    // Max 20 steps.
+    while (this.stack.length > 20) this.stack.shift()
     // Clear all redos.
     this.stack.length = this.index
     this.update()
@@ -171,6 +189,7 @@ $svg.onpointerup = $svg.onpointerout = (ev) => {
       commit = false
     }
     console.log(stroke)
+    updateData(stroke)
     delete strokes[ev.pointerId]
     if (commit) {
       undoStack.commit(
