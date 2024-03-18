@@ -1,4 +1,4 @@
-import { Stroke, type Vec } from './src/ink'
+import { Stroke, Input, type Vec } from './src/ink'
 
 let $root = document.getElementById('app')!
 let $svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -12,12 +12,13 @@ let $settings = {
   data: document.getElementById('data') as HTMLElement,
 }
 
+let renderingMs = 0
 let total = 0
 function updateData(stroke: Stroke) {
   try {
     let bytes = JSON.stringify(stroke.toJSON()).length
     total += bytes
-    $settings.data.textContent = `${prettyBytes(bytes)} (Total: ${prettyBytes(total)})`
+    $settings.data.textContent = `${renderingMs.toFixed(1)}ms, ${prettyBytes(bytes)} (Total: ${prettyBytes(total)})`
   } catch (err) {
     console.error(err)
   }
@@ -88,8 +89,6 @@ $settings.clear.onclick = () => {
 $settings.undo.onclick = () => undoStack.undo()
 $settings.redo.onclick = () => undoStack.redo()
 
-let rect: DOMRect
-
 $g.setAttribute('fill', 'currentColor')
 $settings.outline.oninput = () => {
   let outline = $settings.outline.checked
@@ -102,107 +101,82 @@ $settings.outline.oninput = () => {
   }
 }
 
+
 $svg.setAttribute('fill-rule', 'nonzero')
 $svg.style.cssText = 'display: block; width: 100%; height: 100%; font-size: 0; touch-action: none; position: relative; contain: content'
 
 let scheduled = false
-let strokes = { __proto__: null } as { [id: number]: [s: Stroke, p: SVGPathElement, x: number, y: number, pred?: PointerEvent | null] }
+let strokes = { __proto__: null } as { [id: number]: [s: Stroke, p: SVGPathElement] }
 let dirty = { __proto__: null } as { [id: number]: true }
+let input = Input.create({ dom: $svg })
 
-$svg.onpointerdown = (ev) => {
-  ev.preventDefault()
-  ev.stopPropagation()
-  $svg.setPointerCapture(ev.pointerId)
-  rect = $svg.getBoundingClientRect()
-  let stroke = Stroke.create([{ x: ev.clientX - rect.left, y: ev.clientY - rect.top, r: ev.pressure }])
+// const clamp = (val: number, min: number, max: number) => {
+//   return val < min ? min : val > max ? max : val
+// }
+// let transform = { x: 0, y: 0, scale: 1 }
+// input.on('pinch', ({ x, y, scale }) => {
+//   console.log('pinch', x, y, scale)
+//   transform.x += x
+//   transform.y += y
+//   transform.scale *= scale
+//   // Limit viewport.
+//   transform.x = clamp(transform.x, -400, 400)
+//   transform.y = clamp(transform.y, -300, 300)
+//   transform.scale = clamp(transform.scale, 0.125, 4)
+//   // Update.
+//   $g.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`
+// })
+
+input.on('open', (id, raw) => {
+  let stroke = Stroke.create([raw])
   let $path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
   $path.style.pointerEvents = 'none'
-  strokes[ev.pointerId] = [stroke, $path, ev.clientX, ev.clientY]
-  dirty[ev.pointerId] = true
+  strokes[id] = [stroke, $path]
+  dirty[id] = true
   $g.append($path)
   if (scheduled) return;
   scheduled = true
   queueMicrotask(render)
-}
+})
 
-$svg.onpointermove = (ev) => {
-  ev.preventDefault()
-  ev.stopPropagation()
-  if (strokes[ev.pointerId]) {
-    let [stroke, _path, x_, y_] = strokes[ev.pointerId]
-
-    // Apple pencil's bug, it fires 2 identical events.
-    // For pressure-change-only events, it seems chrome will emit a point that slightly changes position (x+1).
-    // So this workaround does not cause other issues.
-    if (x_ == ev.clientX && y_ == ev.clientY) return;
-    strokes[ev.pointerId][2] = ev.clientX
-    strokes[ev.pointerId][3] = ev.clientY
-
-    // Firefox sometimes give 0 to mousemove events, fix them to 0.5.
-    let pressure: number | undefined
-    if (ev.pointerType === 'mouse' && pressure == 0) pressure = 0.5
-
-    // @ts-ignore
-    if (ev.getCoalescedEvents) ev.getCoalescedEvents().forEach(e => {
-      stroke.push({ x: e.clientX - rect.left, y: e.clientY - rect.top, r: pressure ?? e.pressure })
-    })
-    else {
-      stroke.push({ x: ev.clientX - rect.left, y: ev.clientY - rect.top, r: pressure ?? ev.pressure })
-    }
-    dirty[ev.pointerId] = true
-
-    // @ts-ignore
-    if (ev.getPredictedEvents) {
-      strokes[ev.pointerId][4] = ev.getPredictedEvents()[0]
-    }
-
+input.on('update', (id, raw) => {
+  if (strokes[id]) {
+    let [stroke] = strokes[id]
+    stroke.push(raw)
+    dirty[id] = true
     if (scheduled) return;
     scheduled = true
     queueMicrotask(render)
   }
-}
+})
 
-$svg.onpointercancel = (ev) => {
-  ev.preventDefault()
-  ev.stopPropagation()
-  if (strokes[ev.pointerId]) {
-    strokes[ev.pointerId][1].remove()
-    delete strokes[ev.pointerId]
+input.on('cancel', (id) => {
+  if (strokes[id]) {
+    strokes[id][1].remove()
+    delete strokes[id]
   }
-}
+})
 
-$svg.onpointerup = $svg.onpointerout = (ev) => {
-  ev.preventDefault()
-  ev.stopPropagation()
-  if (strokes[ev.pointerId]) {
-    let [stroke, $path, x_, y_, e] = strokes[ev.pointerId]
+input.on('close', (id) => {
+  if (strokes[id]) {
+    let [stroke, $path] = strokes[id]
     let commit = true
-    if (e && (e.clientX != x_ || e.clientY != y_)) {
-      stroke.push({
-        x: Math.round(e.clientX - rect.left),
-        y: Math.round(e.clientY - rect.top),
-        r: Math.max(e.pressure, 0.1),
-      })
-      dirty[e.pointerId] = true
-      render()
-    }
-    // If this stroke is too small to be seen, remove it
-    else if (stroke.empty) {
+    if (stroke.empty) {
       $path.remove()
       commit = false
     }
-    console.log(stroke)
     updateData(stroke)
-    delete strokes[ev.pointerId]
-    if (commit) {
-      undoStack.commit(
-        () => $path.remove(),
-        // The z-index is not correct, but this demo does not care about it.
-        () => $g.append($path),
-      )
-    }
+    console.log(stroke)
+    scheduled = true
+    render()
+    delete strokes[id]
+    if (commit) undoStack.commit(
+      () => $path.remove(),
+      // The z-index is not correct, but this demo does not care about it.
+      () => $g.append($path),
+    )
   }
-}
+})
 
 $svg.ontouchstart = $svg.ontouchmove = $svg.ontouchend = $svg.ontouchcancel = (ev) => {
   ev.preventDefault()
@@ -215,16 +189,21 @@ const L = ({ x, y }) => `L${x.toFixed(2)},${y.toFixed(2)}`;
 const Q = (c, { x, y }) => `Q${c.x.toFixed(2)},${c.y.toFixed(2)} ${x.toFixed(2)},${y.toFixed(2)}`;
 
 function render() {
+  if (!scheduled) return;
   scheduled = false
   let size = $settings.size.valueAsNumber
-  for (let id in dirty) if (strokes[id]) {
-    let [stroke, $path] = strokes[id], d = ''
-    for (let index of stroke.sections) {
-      d += simple_bezier(stroke.outline(index, size))
+  let t0 = performance.now()
+  for (let id in dirty) {
+    if (strokes[id]) {
+      let [stroke, $path] = strokes[id], d = ''
+      for (let index of stroke.sections) {
+        d += simple_bezier(stroke.outline(index, size))
+      }
+      $path.setAttribute('d', d)
     }
-    $path.setAttribute('d', d)
+    delete dirty[id]
   }
-  dirty = { __proto__: null } as typeof dirty
+  renderingMs = performance.now() - t0
 }
 
 function simple_bezier(points: Vec[]) {
@@ -238,3 +217,7 @@ function simple_bezier(points: Vec[]) {
   }
   return d + L(points[points.length - 1])
 }
+
+Object.assign(window, {
+  debug: { undoStack, strokes, dirty, input }
+})

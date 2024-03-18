@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@marijn/buildtool@1.0.0':
-    hash: 2qkzl57vwm7usihqmfcte6n344
+    hash: g3zqmx2gnh62e64tvi5azkx2g4
     path: patches/@marijn__buildtool@1.0.0.patch
 
 devDependencies:
@@ -15,7 +15,7 @@ devDependencies:
     version: 0.1.1
   '@marijn/buildtool':
     specifier: ^1.0.0
-    version: 1.0.0(patch_hash=2qkzl57vwm7usihqmfcte6n344)
+    version: 1.0.0(patch_hash=g3zqmx2gnh62e64tvi5azkx2g4)
   '@rollup/plugin-replace':
     specifier: ^5.0.5
     version: 5.0.5(rollup@4.13.0)
@@ -281,7 +281,7 @@ packages:
     resolution: {integrity: sha512-eF2rxCRulEKXHTRiDrDy6erMYWqNw4LPdQ8UQA4huuxaQsVeRPFl2oM8oDGxMFhJUWZf9McpLtJasDDZb/Bpeg==}
     dev: true
 
-  /@marijn/buildtool@1.0.0(patch_hash=2qkzl57vwm7usihqmfcte6n344):
+  /@marijn/buildtool@1.0.0(patch_hash=g3zqmx2gnh62e64tvi5azkx2g4):
     resolution: {integrity: sha512-yweS09UWiKGAIvteZcE0H/ddDPOjetI4lzO491z0Lph+hgV6RDF0sEZuZv3K51jwz+UU3rQVskjebHCgNxDE6A==}
     dependencies:
       '@types/mocha': 9.1.1

@@ -1,17 +1,25 @@
 diff --git a/src/buildtool.js b/src/buildtool.js
-index 77a2fcd6b6462c5fbf66e7336363fa02c0091f7e..da809c7752e290fa605b5becea61f5a061fa410b 100644
+index 77a2fcd6b6462c5fbf66e7336363fa02c0091f7e..72996117d11462efd1a8bb01b5b27129f0c0c628 100644
 --- a/src/buildtool.js
 +++ b/src/buildtool.js
-@@ -195,7 +195,7 @@ async function emit(bundle, conf, makePure = false) {
+@@ -94,7 +94,7 @@ function readAndMangleComments(dirs, options) {
+                         let result = options.expandLink(anchor);
+                         return result ? `](${result})` : m;
+                     });
+-                return `${space}/**\n${space}${comment.slice(space.length).replace(/\/\/\/ ?/g, "")}${space}*/\n`;
++                return `${space}/**\n${space}${comment.slice(space.length).replace(/\/\/\/ ?/g, " * ")}${space} */\n`;
+             });
+         return file;
+     };
+@@ -195,7 +195,6 @@ async function emit(bundle, conf, makePure = false) {
              content = addPureComments(content);
          let sourceMap = file.map;
          if (sourceMap) {
 -            content = content + `\n//# sourceMappingURL=${file.fileName}.map`;
-+            // content = content + `\n//# sourceMappingURL=${file.fileName}.map`;
              await fs.promises.writeFile((0, path_1.join)(dir, file.fileName + ".map"), sourceMap.toString());
          }
          await fs.promises.writeFile((0, path_1.join)(dir, file.fileName), content);
-@@ -219,12 +219,12 @@ async function bundle(pkg, compiled, options) {
+@@ -219,12 +218,6 @@ async function bundle(pkg, compiled, options) {
          externalLiveBindings: false,
          sourcemap: options.sourceMap
      }, options.pureTopCalls && !options.sourceMap);
@@ -21,16 +29,10 @@ index 77a2fcd6b6462c5fbf66e7336363fa02c0091f7e..da809c7752e290fa605b5becea61f5a0
 -        sourcemap: options.sourceMap,
 -        plugins: options.cjsOutputPlugin ? [options.cjsOutputPlugin(pkg.root)] : []
 -    });
-+    // await emit(bundle, {
-+    //     format: "cjs",
-+    //     file: (0, path_1.join)(dist, bundleName + ".cjs"),
-+    //     sourcemap: options.sourceMap,
-+    //     plugins: options.cjsOutputPlugin ? [options.cjsOutputPlugin(pkg.root)] : []
-+    // });
      let tscBundle = await (0, rollup_1.rollup)({
          input: pkg.main.replace(/\.ts$/, ".d.ts"),
          external,
-@@ -238,10 +238,10 @@ async function bundle(pkg, compiled, options) {
+@@ -238,10 +231,6 @@ async function bundle(pkg, compiled, options) {
          format: "esm",
          file: (0, path_1.join)(dist, bundleName + ".d.ts")
      });
@@ -38,10 +40,6 @@ index 77a2fcd6b6462c5fbf66e7336363fa02c0091f7e..da809c7752e290fa605b5becea61f5a0
 -        format: "esm",
 -        file: (0, path_1.join)(dist, bundleName + ".d.cts")
 -    });
-+    // await emit(tscBundle, {
-+    //     format: "esm",
-+    //     file: (0, path_1.join)(dist, bundleName + ".d.cts")
-+    // });
  }
  function allDirs(pkgs) {
      return pkgs.reduce((a, p) => a.concat(p.dirs), []);
