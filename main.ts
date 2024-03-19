@@ -1,4 +1,4 @@
-import { Stroke, Input, type Vec } from './src/ink'
+import { Stroke, Input, type Vec, type RawPoint } from './src/ink'
 
 let $root = document.getElementById('app')!
 let $svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -9,7 +9,38 @@ let $settings = {
   undo: document.getElementById('undo') as HTMLButtonElement,
   redo: document.getElementById('redo') as HTMLButtonElement,
   outline: document.getElementById('outline') as HTMLInputElement,
+  pressure: document.getElementById('pressure') as HTMLInputElement,
   data: document.getElementById('data') as HTMLElement,
+}
+let $log = document.getElementById('log')!
+function log(...msg: any[]) {
+  $log.append(msg.map(inspect).join(' ') + '\n')
+  if ($log.childNodes.length > 20)
+    $log.removeChild($log.firstChild!)
+}
+function inspect(obj: any): string {
+  if (typeof obj === 'object') {
+    if (typeof obj === 'function') return 'Fn()';
+    let str = '{', content = false
+    for (let key in obj) {
+      str += ' ' + key + ': ' + inspect(obj[key]) + ','
+      content = true
+    }
+    str = content ? str.slice(0, -1) + ' }' : str + '}'
+    return str
+  } else {
+    return '' + obj
+  }
+}
+
+window.onerror = function debug(error: any) {
+  log(error)
+}
+
+let __log = console.log
+console.log = function() {
+  log.apply(this, arguments)
+  return __log.apply(this, arguments)
 }
 
 let renderingMs = 0
@@ -101,34 +132,71 @@ $settings.outline.oninput = () => {
   }
 }
 
-
 $svg.setAttribute('fill-rule', 'nonzero')
-$svg.style.cssText = 'display: block; width: 100%; height: 100%; font-size: 0; touch-action: none; position: relative; contain: content'
+$svg.style.cssText = `display: block; width: 100%; height: 100%;
+font-size: 0; touch-action: none; position: relative; contain: content;
+overflow: hidden; overscroll-behavior: none;`
 
 let scheduled = false
 let strokes = { __proto__: null } as { [id: number]: [s: Stroke, p: SVGPathElement] }
 let dirty = { __proto__: null } as { [id: number]: true }
-let input = Input.create({ dom: $svg })
+let input = Input.create({ dom: $svg, gesture: false })
 
-// const clamp = (val: number, min: number, max: number) => {
-//   return val < min ? min : val > max ? max : val
-// }
+$settings.pressure.oninput = () => {
+  input.pressure = $settings.pressure.checked
+}
+
 // let transform = { x: 0, y: 0, scale: 1 }
-// input.on('pinch', ({ x, y, scale }) => {
-//   console.log('pinch', x, y, scale)
-//   transform.x += x
-//   transform.y += y
-//   transform.scale *= scale
-//   // Limit viewport.
-//   transform.x = clamp(transform.x, -400, 400)
-//   transform.y = clamp(transform.y, -300, 300)
-//   transform.scale = clamp(transform.scale, 0.125, 4)
-//   // Update.
-//   $g.style.transform = `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`
+// $g.style.cssText = `position: absolute; transform-origin: 0 0; pointer-events: none;`
+// function updateTransform() {
+//   let { x, y, scale } = transform
+//   $g.style.transform = `scale(${scale}) translate(${x}px, ${y}px)`
+// }
+// function applyTransform(raw: RawPoint): RawPoint {
+//   return {
+//     x: (raw.x - transform.x) / transform.scale,
+//     y: (raw.y - transform.y) / transform.scale,
+//     r: raw.r,
+//   }
+// }
+function applyTransform(raw: RawPoint) { return raw }
+
+// input.on('wheel', (wheel) => {
+//   let { x, y, scale } = transform
+//   if (wheel.deltaScale != 0) {
+//     let rate = 1 + wheel.deltaScale
+//     let k = (1 - 1 / rate) / scale
+//     x -= k * wheel.x
+//     y -= k * wheel.y
+//     scale *= rate
+//   }
+//   x += wheel.deltaX / scale
+//   y += wheel.deltaY / scale
+//   transform = { x, y, scale }
+//   updateTransform()
+// })
+
+// let pinchSavedTransform: typeof transform | null
+// input.on('pinch', (pinch) => {
+//   if (pinch.phase == 0) {
+//     pinchSavedTransform = transform
+//   }
+//   else if (pinch.phase == 1 && pinchSavedTransform) {
+//     let { x, y, scale } = pinchSavedTransform
+//     scale *= pinch.deltaScale
+//     x -= pinch.deltaX / scale
+//     y -= pinch.deltaY / scale
+//     transform = { x, y, scale }
+//     updateTransform()
+//     console.log(pinch)
+//   }
+//   else if (pinch.phase == 2) {
+//     pinchSavedTransform = null
+//   }
 // })
 
 input.on('open', (id, raw) => {
-  let stroke = Stroke.create([raw])
+  let stroke = Stroke.create([applyTransform(raw)])
   let $path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
   $path.style.pointerEvents = 'none'
   strokes[id] = [stroke, $path]
@@ -142,7 +210,7 @@ input.on('open', (id, raw) => {
 input.on('update', (id, raw) => {
   if (strokes[id]) {
     let [stroke] = strokes[id]
-    stroke.push(raw)
+    stroke.push(applyTransform(raw))
     dirty[id] = true
     if (scheduled) return;
     scheduled = true
@@ -165,11 +233,13 @@ input.on('close', (id) => {
       $path.remove()
       commit = false
     }
+    if (!scheduled) {
+      scheduled = true
+      queueMicrotask(render)
+    }
     updateData(stroke)
-    console.log(stroke)
-    scheduled = true
-    render()
-    delete strokes[id]
+    console.info(stroke)
+    queueMicrotask(() => { delete strokes[id] })
     if (commit) undoStack.commit(
       () => $path.remove(),
       // The z-index is not correct, but this demo does not care about it.
