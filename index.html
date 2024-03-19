@@ -17,8 +17,10 @@
     #settings > :is(label, input, button) { pointer-events: auto }
     .splitter { flex: 1 }
     #data { font-variant-numeric: tabular-nums; }
+    #log { position: fixed; inset: 0; padding: 50px 20px 20px; pointer-events: none;
+           font: 12px/1 monospace; opacity: .5; white-space: pre }
   </style>
-  <script type="module" crossorigin src="./assets/index-DWrVlt6I.js"></script>
+  <script type="module" crossorigin src="./assets/index-C72QQNev.js"></script>
 </head>
 <body>
   <div id="app"></div>
@@ -30,8 +32,11 @@
     <button id="redo" disabled>Redo</button>
     <input id="outline" type="checkbox">
     <label for="outline">Outline</label>
+    <input id="pressure" type="checkbox" checked>
+    <label for="pressure">Pressure</label>
     <span class="splitter"></span>
     <span id="data">Data: 0 B</span>
   </div>
+  <div id="log"></div>
 </body>
 </html>
