@@ -1,7 +1,7 @@
 {
   "name": "@hyrious/ink",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Draw perfect pressure-sensitive freehand strokes.",
   "author": "hyrious <hyrious@outlook.com>",
   "license": "MIT",
