@@ -1,8 +1,10 @@
-import { Stroke, Input, type Vec, type RawPoint } from './src/ink'
+import { union, difference } from 'polyclip-ts'
+import { Input, Stroke, type RawPoint, type Vec } from './src/ink'
 
 let $root = document.getElementById('app')!
 let $svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
 let $g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
+let $defs_eraser = document.createElementNS('http://www.w3.org/2000/svg', 'defs')
 let $settings = {
   size: document.getElementById('stroke-size') as HTMLInputElement,
   clear: document.getElementById('clear') as HTMLButtonElement,
@@ -10,8 +12,10 @@ let $settings = {
   redo: document.getElementById('redo') as HTMLButtonElement,
   outline: document.getElementById('outline') as HTMLInputElement,
   pressure: document.getElementById('pressure') as HTMLInputElement,
+  eraser: document.getElementById('eraser') as HTMLInputElement,
   data: document.getElementById('data') as HTMLElement,
 }
+
 let $log = document.getElementById('log')!
 function log(...msg: any[]) {
   $log.append(msg.map(inspect).join(' ') + '\n')
@@ -21,13 +25,25 @@ function log(...msg: any[]) {
 function inspect(obj: any): string {
   if (typeof obj === 'object') {
     if (typeof obj === 'function') return 'Fn()';
-    let str = '{', content = false
-    for (let key in obj) {
-      str += ' ' + key + ': ' + inspect(obj[key]) + ','
-      content = true
+    if (Array.isArray(obj)) {
+      let str = '[', content = false
+      for (let x of obj) {
+        str += ' ' + inspect(x) + ','
+        content = true
+      }
+      str = content ? str.slice(0, -1) + ' ]' : str + ']'
+      return str
+    } else {
+      let str = '{', content = false
+      for (let key in obj) {
+        str += ' ' + key + ': ' + inspect(obj[key]) + ','
+        content = true
+      }
+      str = content ? str.slice(0, -1) + ' }' : str + '}'
+      return str
     }
-    str = content ? str.slice(0, -1) + ' }' : str + '}'
-    return str
+  } else if (typeof obj === 'number') {
+    return obj.toFixed(1)
   } else {
     return '' + obj
   }
@@ -44,15 +60,17 @@ console.log = function() {
 }
 
 let renderingMs = 0
-let total = 0
-function updateData(stroke: Stroke) {
+let bytes = 0, total = 0
+function consumeStroke(stroke: Stroke) {
   try {
-    let bytes = JSON.stringify(stroke.toJSON()).length
+    bytes = JSON.stringify(stroke.toJSON()).length
     total += bytes
-    $settings.data.textContent = `${renderingMs.toFixed(1)}ms, ${prettyBytes(bytes)} (Total: ${prettyBytes(total)})`
-  } catch (err) {
-    console.error(err)
+  } catch (error) {
+    console.error(error)
   }
+}
+function updateData() {
+  $settings.data.textContent = `${renderingMs.toFixed(1)}ms, ${prettyBytes(bytes)} (Total: ${prettyBytes(total)})`
 }
 
 function prettyBytes(n: number) {
@@ -105,6 +123,30 @@ let undoStack = {
   },
 }
 
+function isErasing() { return $settings.eraser.checked }
+
+let $mask = document.createElementNS('http://www.w3.org/2000/svg', 'mask')
+$settings.eraser.oninput = () => {
+  if (isErasing()) {
+    $defs_eraser.append($mask)
+    input.pressure = 1
+    $settings.pressure.disabled = true
+  } else {
+    $mask.remove()
+    input.pressure = $settings.pressure.checked
+    $settings.pressure.disabled = false
+  }
+}
+$mask.setAttribute('id', 'eraser')
+
+let $mask_background = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
+$mask_background.setAttribute('width', '100%')
+$mask_background.setAttribute('height', '100%')
+$mask_background.setAttribute('fill', 'white')
+$mask.append($mask_background)
+$g.setAttribute('mask', 'url(#eraser)')
+
+$svg.append($defs_eraser)
 $svg.append($g)
 $root.append($svg)
 
@@ -137,109 +179,83 @@ $svg.style.cssText = `display: block; width: 100%; height: 100%;
 font-size: 0; touch-action: none; position: relative; contain: content;
 overflow: hidden; overscroll-behavior: none;`
 
-let scheduled = false
 let strokes = { __proto__: null } as { [id: number]: [s: Stroke, p: SVGPathElement] }
 let dirty = { __proto__: null } as { [id: number]: true }
 let input = Input.create({ dom: $svg, gesture: false })
+let eraser: { stroke: Stroke, $path: SVGPathElement } | undefined
 
 $settings.pressure.oninput = () => {
   input.pressure = $settings.pressure.checked
 }
 
-// let transform = { x: 0, y: 0, scale: 1 }
-// $g.style.cssText = `position: absolute; transform-origin: 0 0; pointer-events: none;`
-// function updateTransform() {
-//   let { x, y, scale } = transform
-//   $g.style.transform = `scale(${scale}) translate(${x}px, ${y}px)`
-// }
-// function applyTransform(raw: RawPoint): RawPoint {
-//   return {
-//     x: (raw.x - transform.x) / transform.scale,
-//     y: (raw.y - transform.y) / transform.scale,
-//     r: raw.r,
-//   }
-// }
 function applyTransform(raw: RawPoint) { return raw }
-
-// input.on('wheel', (wheel) => {
-//   let { x, y, scale } = transform
-//   if (wheel.deltaScale != 0) {
-//     let rate = 1 + wheel.deltaScale
-//     let k = (1 - 1 / rate) / scale
-//     x -= k * wheel.x
-//     y -= k * wheel.y
-//     scale *= rate
-//   }
-//   x += wheel.deltaX / scale
-//   y += wheel.deltaY / scale
-//   transform = { x, y, scale }
-//   updateTransform()
-// })
-
-// let pinchSavedTransform: typeof transform | null
-// input.on('pinch', (pinch) => {
-//   if (pinch.phase == 0) {
-//     pinchSavedTransform = transform
-//   }
-//   else if (pinch.phase == 1 && pinchSavedTransform) {
-//     let { x, y, scale } = pinchSavedTransform
-//     scale *= pinch.deltaScale
-//     x -= pinch.deltaX / scale
-//     y -= pinch.deltaY / scale
-//     transform = { x, y, scale }
-//     updateTransform()
-//     console.log(pinch)
-//   }
-//   else if (pinch.phase == 2) {
-//     pinchSavedTransform = null
-//   }
-// })
 
 input.on('open', (id, raw) => {
   let stroke = Stroke.create([applyTransform(raw)])
   let $path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
   $path.style.pointerEvents = 'none'
-  strokes[id] = [stroke, $path]
-  dirty[id] = true
-  $g.append($path)
-  if (scheduled) return;
-  scheduled = true
-  queueMicrotask(render)
+  if (isErasing()) {
+    $path.setAttribute('fill', 'black')
+    $mask.append($path)
+    if (eraser) { eraser.$path.remove() }
+    eraser = { stroke, $path }
+  } else {
+    strokes[id] = [stroke, $path]
+    dirty[id] = true
+    $g.append($path)
+    render()
+  }
 })
 
 input.on('update', (id, raw) => {
-  if (strokes[id]) {
+  if (isErasing() && eraser) {
+    let size = $settings.size.valueAsNumber
+    let { stroke, $path } = eraser, d = '', outlines: Vec[][] = []
+    stroke.push(applyTransform(raw))
+    for (let index of stroke.sections) {
+      let outline = stroke.outline(index, size)
+      d += simple_bezier(outline)
+      outlines.push(outline)
+    }
+    $path[OUTLINES] = outlines
+    $path.setAttribute('d', d)
+  } else if (strokes[id]) {
     let [stroke] = strokes[id]
     stroke.push(applyTransform(raw))
     dirty[id] = true
-    if (scheduled) return;
-    scheduled = true
-    queueMicrotask(render)
+    render()
   }
 })
 
 input.on('cancel', (id) => {
-  if (strokes[id]) {
+  if (isErasing() && eraser) {
+    eraser.$path.remove()
+  } else if (strokes[id]) {
     strokes[id][1].remove()
     delete strokes[id]
   }
 })
 
 input.on('close', (id) => {
-  if (strokes[id]) {
+  if (isErasing() && eraser) {
+    try { erase(eraser) }
+    catch (error) {
+      console.error(error)
+      alert('Failed to erase: ' + error)
+    }
+    eraser = void 0
+  } if (strokes[id]) {
     let [stroke, $path] = strokes[id]
     let commit = true
     if (stroke.empty) {
       $path.remove()
       commit = false
     }
-    if (!scheduled) {
-      scheduled = true
-      queueMicrotask(render)
-    }
-    updateData(stroke)
+    render()
+    consumeStroke(stroke)
+    updateData()
     console.info(stroke)
-    queueMicrotask(() => { delete strokes[id] })
+    delete strokes[id]
     if (commit) undoStack.commit(
       () => $path.remove(),
       // The z-index is not correct, but this demo does not care about it.
@@ -253,27 +269,60 @@ $svg.ontouchstart = $svg.ontouchmove = $svg.ontouchend = $svg.ontouchcancel = (e
   ev.stopPropagation()
 }
 
+document.onkeydown = (ev) => {
+  let ctrl = ev.ctrlKey, shift = ev.shiftKey, meta = ev.metaKey, alt = ev.altKey, code = ev.keyCode
+  let primary = input._browser.mac ? meta : ctrl
+
+  const click = (btn: HTMLInputElement | HTMLButtonElement) => {
+    ev.preventDefault()
+    btn.focus(); btn.click()
+  }
+
+  if (!ctrl && !shift && !meta && !alt) {
+    if (code == 79) click($settings.outline);
+    if (code == 80) {
+      if ($settings.pressure.disabled) {
+        click($settings.eraser)
+      } else {
+        click($settings.pressure)
+      }
+    }
+    if (code == 69) click($settings.eraser);
+  } else if (primary && !shift && code == 90) {
+    click($settings.undo)
+  } else if (primary && shift && code == 90) {
+    click($settings.redo)
+  }
+}
+
 const mid = (a: Vec, b: Vec): Vec => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 })
 const M = ({ x, y }) => `M${x.toFixed(2)},${y.toFixed(2)}`;
 const L = ({ x, y }) => `L${x.toFixed(2)},${y.toFixed(2)}`;
 const Q = (c, { x, y }) => `Q${c.x.toFixed(2)},${c.y.toFixed(2)} ${x.toFixed(2)},${y.toFixed(2)}`;
 
+type MultiPoly = [x: number, y: number][][][]
+const OUTLINES = '_outlines'
+
 function render() {
-  if (!scheduled) return;
-  scheduled = false
   let size = $settings.size.valueAsNumber
-  let t0 = performance.now()
+  let t0 = performance.now(), working = false
   for (let id in dirty) {
     if (strokes[id]) {
-      let [stroke, $path] = strokes[id], d = ''
+      let [stroke, $path] = strokes[id], d = '', outlines: Vec[][] = []
       for (let index of stroke.sections) {
-        d += simple_bezier(stroke.outline(index, size))
+        let outline = stroke.outline(index, size)
+        d += simple_bezier(outline)
+        outlines.push(outline)
       }
+      $path[OUTLINES] = outlines
       $path.setAttribute('d', d)
     }
     delete dirty[id]
+    working = true
   }
-  renderingMs = performance.now() - t0
+  if (working) {
+    renderingMs = performance.now() - t0
+  }
 }
 
 function simple_bezier(points: Vec[]) {
@@ -288,6 +337,48 @@ function simple_bezier(points: Vec[]) {
   return d + L(points[points.length - 1])
 }
 
+function geom($path: SVGPathElement): MultiPoly {
+  let outlines = $path[OUTLINES] || [] as Vec[][], poly: MultiPoly = []
+  for (let outline of outlines) {
+    poly = union(poly, [outline.map(v => [v.x, v.y] as const)])
+  }
+  return poly
+}
+
+function erase({ $path }: { $path: SVGPathElement }) {
+  let t0 = performance.now()
+  let backup = Array.from($g.children) as SVGPathElement[]
+  let content: [x: number, y: number][][][] = []
+  content = union(content, ...backup.map(geom))
+
+  // PERF: Maybe '1) a - collect close outlines 2) union(a) - eraser 3) union(a + rest)' could be faster.
+  let subtract = geom($path)
+  let result = difference(content, subtract)
+  let current = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  current.style.pointerEvents = 'none'
+
+  let d = '', outlines: Vec[][] = []
+  for (let poly of result) {
+    for (let ring of poly) {
+      let outline = ring.map(e => ({ x: e[0], y: e[1] }))
+      d += simple_bezier(outline)
+      outlines.push(outline)
+    }
+  }
+  current[OUTLINES] = outlines
+  current.setAttribute('d', d)
+
+  $g.textContent = ''; $g.append(current)
+  $path.remove()
+
+  undoStack.commit(
+    () => { $g.textContent = ''; $g.append(...backup) },
+    () => { $g.textContent = ''; $g.append(current) },
+  )
+  renderingMs = performance.now() - t0
+  updateData()
+}
+
 Object.assign(window, {
-  debug: { undoStack, strokes, dirty, input }
+  debug: { undoStack, strokes, dirty, input, eraser: () => eraser }
 })

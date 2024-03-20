@@ -22,6 +22,9 @@ devDependencies:
   '@types/node':
     specifier: ^20.11.27
     version: 20.11.27
+  polyclip-ts:
+    specifier: ^0.16.5
+    version: 0.16.5
   vite:
     specifier: ^5.1.6
     version: 5.1.6(@types/node@20.11.27)
@@ -512,6 +515,10 @@ packages:
     resolution: {integrity: sha512-jgsaNduz+ndvGyFt3uSuWqvy4lCnIJiovtouQN5JZHOKCS2QuhEdbcQHFhVksz2N2U9hXJo8odG7ETyWlEeuDw==}
     dev: true
 
+  /bignumber.js@9.1.2:
+    resolution: {integrity: sha512-2/mKyZH9K85bzOEfhXDBFZTGd1CTs+5IHpeFQo9luiBG7hghdC851Pj2WAhb6E3R6b9tZj/XKhbg4fum+Kepug==}
+    dev: true
+
   /cac@6.7.14:
     resolution: {integrity: sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ==}
     engines: {node: '>=8'}
@@ -814,6 +821,13 @@ packages:
       pathe: 1.1.2
     dev: true
 
+  /polyclip-ts@0.16.5:
+    resolution: {integrity: sha512-ZchnG0zGZReHgEo3EYzEUi6UmfQFFzNnj6AFU+gBm+IJJ4qG9gL4CwjtCV6oi/PittUPpJLiLJxcn/AgrCBO+g==}
+    dependencies:
+      bignumber.js: 9.1.2
+      splaytree-ts: 1.0.1
+    dev: true
+
   /postcss@8.4.35:
     resolution: {integrity: sha512-u5U8qYpBCpN13BsiEB0CbR1Hhh4Gc0zLFuedrHJKMctHCHAGrMdG0PRM/KErzAL3CU6/eckEtmHNB3x6e3c0vA==}
     engines: {node: ^10 || ^12 || >=14}
@@ -897,6 +911,10 @@ packages:
   /source-map-js@1.0.2:
     resolution: {integrity: sha512-R0XvVJ9WusLiqTCEiGCmICCMplcCkIwwR11mOSD9CR5u+IXYdiseeEuXCVAjS54zqwkLcPNnmU4OeJ6tUrWhDw==}
     engines: {node: '>=0.10.0'}
+    dev: true
+
+  /splaytree-ts@1.0.1:
+    resolution: {integrity: sha512-B+VzCm33/KEchi/fzT6/3NRHm8k5+Kf37SBQO3meHHS/tK2xBnIm4ZvusQ1wUpHgKMCCqEWgXnwFXAa1nD289g==}
     dev: true
 
   /stackback@0.0.2:
