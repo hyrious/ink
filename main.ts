@@ -1,7 +1,7 @@
 import { union, difference, setPrecision } from 'polyclip-ts'
 import { Input, Stroke, type RawPoint, type Vec } from './src/ink'
 
-setPrecision(0.01)
+setPrecision(1e-12)
 
 let $root = document.getElementById('app')!
 let $svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
