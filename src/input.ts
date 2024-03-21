@@ -162,9 +162,9 @@ export class Input extends Observable<InputEventMap> {
     }
   }
 
-  /// @internal The '<=' is intended for (0, 1] check.
+  /// @internal
   _clamp(val: number, min: number, max: number): number {
-    return val <= min ? min : val > max ? max : val
+    return val < min ? min : val > max ? max : val
   }
 
   /// @internal

@@ -6,7 +6,7 @@ export type { Vec }
 const enum C {
   // SAI-like input smoothing strategy: keep a queue of points
   // and get middle of them. The queue size is `Smoothing + 1`.
-  Smoothing = 1,
+  Smoothing = 0,
   // Skip points that are too close.
   SkipDistance = 4,
   // If |segment| < `MinDistance` and is sharp corner, split here
@@ -152,12 +152,16 @@ export class Stroke {
       let leftPoints: Vec[] = [], rightPoints: Vec[] = [], len = points.length,
           radius = size, prevPressure = points[0].r, drawEndCap = true
       // If `end` is `undefined`, this is the final section. Draw a thinner tail when possible.
-      // The precisely comparing to `0.5` is probably a mouse event (i.e. no real pressure).
-      if (end == null && len >= 2 && points[len - 2].r == 0.5 && points[len - 2].d > C.TailDistance * size) {
-        points[len - 1] = points[len - 1].dup(0.05)
-        points[len - 2] = points[len - 2].dup(Math.max(0.1, points[len - 2].r - 0.3))
-        if (len >= 3) points[len - 3] = points[len - 3].dup(Math.max(0.1, points[len - 3].r - 0.1))
-        drawEndCap = false
+      if (end == null && len >= 2) {
+        let p2 = points[len - 2];
+        // The precisely comparing to `0.5` and `1.0` is probably a mouse event (i.e. no real pressure).
+        if ((p2.r == 0.5 || p2.r == 1.0) && p2.d > C.TailDistance * size) {
+          points[len - 1] = points[len - 1].dup(0.05)
+          points[len - 2] = p2.dup(Math.max(0.1, p2.r - 0.3))
+          let p3 = len >= 3 ? points[len - 3] : null
+          if (p3) points[len - 3] = p3.dup(Math.max(0.1, p3.r - 0.1))
+          drawEndCap = false
+        }
       }
       // Simulate pressure and push left/right points.
       for (let i = 0; i < len; i++) {
