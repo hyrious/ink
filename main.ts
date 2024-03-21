@@ -130,6 +130,7 @@ function isErasing() { return $settings.eraser.checked }
 let $mask = document.createElementNS('http://www.w3.org/2000/svg', 'mask')
 $settings.eraser.oninput = () => {
   if (isErasing()) {
+    updateMaskTransform()
     $defs_eraser.append($mask)
     $settings.pressure.disabled = true
   } else {
@@ -194,10 +195,17 @@ $g.style.transformOrigin = '0 0'
 function updateTransform() {
   let { x, y, scale } = transform
   $g.style.transform = `scale(${scale}) translate(${x}px, ${y}px)`
-  $mask_background.setAttribute('x', '' + -transform.x)
-  $mask_background.setAttribute('y', '' + -transform.y)
-  $mask_background.setAttribute('width', '' + input._rect.width / scale)
-  $mask_background.setAttribute('height', '' + input._rect.height / scale)
+  updateMaskTransform()
+}
+
+function updateMaskTransform() {
+  if (isErasing()) {
+    let { x, y, scale } = transform
+    $mask_background.setAttribute('x', '' + -x)
+    $mask_background.setAttribute('y', '' + -y)
+    $mask_background.setAttribute('width', '' + input._rect.width / scale)
+    $mask_background.setAttribute('height', '' + input._rect.height / scale)
+  }
 }
 
 function applyTransform(raw: RawPoint) {
