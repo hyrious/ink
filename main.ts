@@ -188,7 +188,34 @@ $settings.pressure.oninput = () => {
   input.pressure = $settings.pressure.checked
 }
 
-function applyTransform(raw: RawPoint) { return raw }
+let transform = { x: 0, y: 0, scale: 1 }
+
+$g.style.transformOrigin = '0 0'
+function updateTransform() {
+  let { x, y, scale } = transform
+  $g.style.transform = `scale(${scale}) translate(${x}px, ${y}px)`
+  $mask_background.setAttribute('x', '' + -transform.x)
+  $mask_background.setAttribute('y', '' + -transform.y)
+}
+
+function applyTransform(raw: RawPoint) {
+  return { x: raw.x / transform.scale - transform.x, y: raw.y / transform.scale - transform.y, r: raw.r }
+}
+
+input.on('wheel', (ev) => {
+  let { x, y, scale } = transform
+  if (ev.deltaScale != 0) {
+    let kScale = 1 + ev.deltaScale
+    let k = (1 - 1 / kScale) / scale
+    x -= k * ev.x
+    y -= k * ev.y
+    scale *= kScale
+  }
+  x += ev.deltaX / scale
+  y += ev.deltaY / scale
+  transform = { x, y, scale }
+  updateTransform()
+})
 
 input.on('open', (id, raw) => {
   let stroke = Stroke.create([applyTransform(raw)])
