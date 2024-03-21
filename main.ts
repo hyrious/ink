@@ -196,6 +196,8 @@ function updateTransform() {
   $g.style.transform = `scale(${scale}) translate(${x}px, ${y}px)`
   $mask_background.setAttribute('x', '' + -transform.x)
   $mask_background.setAttribute('y', '' + -transform.y)
+  $mask_background.setAttribute('width', '' + input._rect.width / scale)
+  $mask_background.setAttribute('height', '' + input._rect.height / scale)
 }
 
 function applyTransform(raw: RawPoint) {
