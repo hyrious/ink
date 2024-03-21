@@ -1,5 +1,6 @@
 import { union, difference, setPrecision } from 'polyclip-ts'
 import { Input, Stroke, type RawPoint, type Vec } from './src/ink'
+import { clamp } from './src/vec'
 
 setPrecision(1e-12)
 
@@ -329,6 +330,10 @@ document.onkeydown = (ev) => {
       }
     }
     if (code == 69) click($settings.eraser);
+    if (code == 219 || code == 221) {
+      let size = $settings.size.valueAsNumber, inc = code == 221 ? 5 : -5
+      $settings.size.value = '' + clamp(size + inc, +$settings.size.min, +$settings.size.max)
+    }
   } else if (primary && !shift && code == 90) {
     click($settings.undo)
   } else if (primary && shift && code == 90) {
