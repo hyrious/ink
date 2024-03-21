@@ -131,11 +131,9 @@ let $mask = document.createElementNS('http://www.w3.org/2000/svg', 'mask')
 $settings.eraser.oninput = () => {
   if (isErasing()) {
     $defs_eraser.append($mask)
-    input.pressure = 1
     $settings.pressure.disabled = true
   } else {
     $mask.remove()
-    input.pressure = $settings.pressure.checked
     $settings.pressure.disabled = false
   }
 }
@@ -211,7 +209,7 @@ input.on('open', (id, raw) => {
 
 input.on('update', (id, raw) => {
   if (isErasing() && eraser) {
-    let size = $settings.size.valueAsNumber
+    let size = $settings.size.valueAsNumber * 2
     let { stroke, $path } = eraser, d = '', outlines: Vec[][] = []
     stroke.push(applyTransform(raw))
     for (let index of stroke.sections) {
@@ -240,12 +238,16 @@ input.on('cancel', (id) => {
 
 input.on('close', (id) => {
   if (isErasing() && eraser) {
+    let t0 = performance.now()
     try { erase(eraser) }
     catch (error) {
       console.error(error)
       alert('Failed to erase: ' + error)
     }
+    finally { eraser.$path.remove() }
     eraser = void 0
+    renderingMs = performance.now() - t0
+    updateData()
   } if (strokes[id]) {
     let [stroke, $path] = strokes[id]
     let commit = true
@@ -304,6 +306,7 @@ const Q = (c, { x, y }) => `Q${c.x.toFixed(2)},${c.y.toFixed(2)} ${x.toFixed(2)}
 
 type MultiPoly = [x: number, y: number][][][]
 const OUTLINES = '_outlines'
+const POLY = '_poly'
 
 function render() {
   let size = $settings.size.valueAsNumber
@@ -340,6 +343,7 @@ function simple_bezier(points: Vec[]) {
 }
 
 function geom($path: SVGPathElement): MultiPoly {
+  if ($path[POLY]) return $path[POLY]
   let outlines = $path[OUTLINES] || [] as Vec[][], poly: MultiPoly = []
   for (let outline of outlines) {
     poly = union(poly, [outline.map(v => [v.x, v.y] as const)])
@@ -359,19 +363,17 @@ function erase({ $path }: { $path: SVGPathElement }) {
   let current = document.createElementNS('http://www.w3.org/2000/svg', 'path')
   current.style.pointerEvents = 'none'
 
-  let d = '', outlines: Vec[][] = []
+  let d = ''
   for (let poly of result) {
     for (let ring of poly) {
       let outline = ring.map(e => ({ x: e[0], y: e[1] }))
       d += simple_bezier(outline)
-      outlines.push(outline)
     }
   }
-  current[OUTLINES] = outlines
+  current[POLY] = result
   current.setAttribute('d', d)
 
   $g.textContent = ''; $g.append(current)
-  $path.remove()
 
   undoStack.commit(
     () => { $g.textContent = ''; $g.append(...backup) },

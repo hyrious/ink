@@ -1,4 +1,5 @@
 import type { RawPoint } from './ink'
+import { clamp } from './vec'
 
 const enum C {
   // Zoom speed by mouse wheel.
@@ -163,13 +164,8 @@ export class Input extends Observable<InputEventMap> {
   }
 
   /// @internal
-  _clamp(val: number, min: number, max: number): number {
-    return val < min ? min : val > max ? max : val
-  }
-
-  /// @internal
   _mapPressure(real: number): number {
-    return this.pressure === true ? real : this._clamp(this.pressure || 0.5, 0, 1)
+    return this.pressure === true ? real : clamp(this.pressure || 0.5, 0, 1)
   }
 
   /// @internal

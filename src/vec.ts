@@ -25,8 +25,4 @@ export const dot = (a: Vec, b: Vec) => a.x * b.x + a.y * b.y
 export const lerp = (a: Vec, b: Vec, t: number) => add(a, mul(sub(b, a), t))
 export const proj = (a: Vec, b: Vec, c: number) => add(a, mul(b, c))
 
-export const copy = (a: Vec, b: Vec) => {
-  (a as { x: number }).x = b.x;
-  (a as { y: number }).y = b.y
-  return a
-}
+export const clamp = (val: number, min: number, max: number) => val < min ? min : val > max ? max : val

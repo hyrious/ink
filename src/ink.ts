@@ -1,4 +1,4 @@
-import { add, dot, lerp, mul, neg, norm, per, proj, rot, sub, type Vec } from './vec'
+import { add, clamp, dot, lerp, mul, neg, norm, per, proj, rot, sub, type Vec } from './vec'
 
 export type { Vec }
 
@@ -169,14 +169,15 @@ export class Stroke {
         // Fix first point's distance and direction (assume the same as the next point).
         if (i == 0) {
           d = 0
-          if (i < len - 1) v = points[i + 1].v
+          // Because `points.length > 1`, `points[1]` must exist.
+          v = points[1].v
         }
         let sp = Math.min(1, d / size), rp = Math.min(1, 1 - sp),
             pressure = Math.min(1, prevPressure + (rp - prevPressure) * (sp * C.PressureChangeSpeed)),
             nextVector = (i < len - 1 ?  points[i + 1] : points[i]).v,
             nextDot = i < len - 1 ? dot(v, nextVector) : 1
 
-        radius = Math.max(size * (0.5 * pressure), C.MinRadius)
+        radius = clamp(size * 0.5 * pressure, C.MinRadius, size / 2)
 
         let offset = mul(per(lerp(nextVector, v, nextDot)), radius)
         let pl = sub(p, offset); leftPoints.push(pl)
