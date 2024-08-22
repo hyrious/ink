@@ -2,6 +2,7 @@
   "include": ["src"],
   "extends": "@hyrious/configs/tsconfig.casual.json",
   "compilerOptions": {
-    "lib": ["ES2017", "DOM"]
+    "lib": ["ES2017", "DOM"],
+    "verbatimModuleSyntax": false
   }
 }
