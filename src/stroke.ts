@@ -33,9 +33,9 @@ export class RawPoint implements IPoint {
   /// Construct a RawPoint from a PointerEvent.
   /// The position is from clientX and clientY, which may not be the best choice
   /// for draw boards supporting pinch and zoom. Use {@link RawPoint.of} instead.
-  static fromEvent(event: PointerEvent) {
+  static fromEvent(event: PointerEvent, pressure = clamp(event.pressure || 0.5, 0, 1)) {
     // Some stylus devices may report zero pressure, treat as no-pressure.
-    return new RawPoint(event.clientX, event.clientY, clamp(event.pressure || 0.5, 0, 1), event.timeStamp);
+    return new RawPoint(event.clientX, event.clientY, pressure, event.timeStamp);
   }
 
   /// @internal
