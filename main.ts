@@ -44,7 +44,7 @@ $settings.pressure.oninput = () => {
 
 $settings.eraser.oninput = () => {
   let erasing = $settings.eraser.checked
-  $svg.style.cursor = erasing ? `url(https://api.iconify.design/mdi:eraser.svg?color=${encodeURIComponent($settings.color.value)}) 0 32, auto` : 'default'
+  $mask.style.cursor = erasing ? `url(https://api.iconify.design/mdi:eraser.svg?color=${encodeURIComponent($settings.color.value)}) 12 32, auto` : 'default'
   $mask.style.display = erasing ? 'block' : 'none'
 }
 
