@@ -2,6 +2,7 @@ import { clamp, RawPoint, Stroke } from './src/ink'
 
 let $root = document.getElementById('app')!
 let $svg = $root.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
+let $mask = $root.appendChild(document.createElement('div'))
 let $settings = {
   color: document.getElementById('stroke-color') as HTMLInputElement,
   size: document.getElementById('stroke-size') as HTMLInputElement,
@@ -9,6 +10,7 @@ let $settings = {
   undo: document.getElementById('undo') as HTMLButtonElement,
   redo: document.getElementById('redo') as HTMLButtonElement,
   pressure: document.getElementById('pressure') as HTMLInputElement,
+  eraser: document.getElementById('eraser') as HTMLInputElement,
 }
 
 $svg.setAttribute('fill-rule', 'nonzero')
@@ -16,6 +18,9 @@ $svg.setAttribute('fill', 'currentColor')
 $svg.style.cssText = `display: block; width: 100%; height: 100%;
 font-size: 0; touch-action: none; position: relative; contain: content;
 overflow: hidden; overscroll-behavior: none;`
+
+$mask.style.cssText = `display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+touch-action: none; contain: content; z-index: 1;`
 
 $settings.color.value = matchMedia('(prefers-color-scheme: dark)').matches ? '#ffffff' : '#000000'
 
@@ -35,6 +40,12 @@ let pressure: 0.5 | undefined
 
 $settings.pressure.oninput = () => {
   pressure = $settings.pressure.checked ? void 0 : 0.5
+}
+
+$settings.eraser.oninput = () => {
+  let erasing = $settings.eraser.checked
+  $svg.style.cursor = erasing ? `url(https://api.iconify.design/mdi:eraser.svg?color=${encodeURIComponent($settings.color.value)}) 0 32, auto` : 'default'
+  $mask.style.display = erasing ? 'block' : 'none'
 }
 
 let running = new Map<number, PointerEvent>()
@@ -94,6 +105,34 @@ $svg.onpointercancel = (e) => {
 }
 
 $svg.ontouchstart = $svg.ontouchmove = $svg.ontouchend = $svg.ontouchcancel = (e) => {
+  e.preventDefault()
+  e.stopPropagation()
+}
+
+let eraserLastPoint: RawPoint | undefined
+
+$mask.onpointerdown = (e) => {
+  e.preventDefault()
+  e.stopPropagation()
+  $mask.setPointerCapture(e.pointerId)
+  onErase(eraserLastPoint = RawPoint.fromEvent(e))
+}
+
+$mask.onpointermove = (e) => {
+  if (eraserLastPoint) {
+    e.preventDefault()
+    e.stopPropagation()
+    let current = RawPoint.fromEvent(e)
+    onErase(current)
+    eraserLastPoint = current
+  }
+}
+
+$mask.onpointerup = $mask.onpointerout = (e) => {
+  eraserLastPoint = void 0
+}
+
+$mask.ontouchstart = $mask.ontouchmove = $mask.ontouchend = $mask.ontouchcancel = (e) => {
   e.preventDefault()
   e.stopPropagation()
 }
@@ -184,6 +223,26 @@ let onClose = (id: number) => {
   }
 }
 
+let onErase = (p: RawPoint) => {
+  let point = $svg.createSVGPoint()
+  point.x = p.x
+  point.y = p.y
+  for (let $path of $svg.children as unknown as SVGPathElement[]) {
+    $path.isPointInFill(point) && $path.remove()
+  }
+  if (eraserLastPoint) {
+    let dx = p.x - eraserLastPoint.x, dy = p.y - eraserLastPoint.y
+    for (let x = 0; x < 1; x += 0.1) {
+      let point = $svg.createSVGPoint()
+      point.x = p.x - x * dx
+      point.y = p.y - x * dy
+      for (let $path of $svg.children as unknown as SVGPathElement[]) {
+        $path.isPointInFill(point) && $path.remove()
+      }
+    }
+  }
+}
+
 // This happens synchronously, without even a microtask.
 let render = () => {
   let size = $settings.size.valueAsNumber
@@ -231,7 +290,12 @@ document.onkeydown = (ev) => {
   }
 
   if (!ctrl && !shift && !meta && !alt) {
-    if (code == 80) click($settings.pressure)
+    if (code == 80)
+      if ($settings.eraser.checked)
+        click($settings.eraser)
+      else
+        click($settings.pressure)
+    if (code == 69) click($settings.eraser) 
     if (code == 219 || code == 221) {
       let size = $settings.size.valueAsNumber, inc = code == 221 ? 5 : -5
       $settings.size.value = '' + clamp(size + inc, +$settings.size.min, +$settings.size.max)
