@@ -87,6 +87,7 @@ let onUpdate = (id: number, p: RawPoint) => {
     strokes[id][0].push(p)
     dirty[id] = true
     render()
+    requestAnimation()
   }
 }
 
@@ -102,7 +103,7 @@ let onClose = (id: number) => {
   if (strokes[id]) {
     let [stroke, $path] = strokes[id]
     if (stroke.empty) {
-      $path.remove()
+      if (!stroke.dot) $path.remove()
     }
     render()
     delete dirty[id]
@@ -111,7 +112,7 @@ let onClose = (id: number) => {
 }
 
 // Full width of the stroke if pressure is 1.
-let size = 12
+let size = 9
 
 // This happens synchronously, without even a microtask.
 let render = () => {
@@ -142,8 +143,6 @@ let updateAnimation = () => {
     if (strokes[id][0].isSpreading()) {
       dirty[id] = true
       schedule = true
-    } else {
-      delete strokes[id]
     }
   }
   if (schedule) requestAnimation()

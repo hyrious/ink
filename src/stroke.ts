@@ -85,9 +85,9 @@ const enum C {
   // Minimal stroke width / 2.
   MinRadius = 0.75,
   // Spreading interval in milliseconds.
-  SpreadInterval = 350,
+  SpreadInterval = 300,
   // Spreading amount per interval.
-  SpreadAmount = 0.15,
+  SpreadAmount = 0.12,
 }
 
 /// @internal Increase each point's pressure in the next period with a small amount.
