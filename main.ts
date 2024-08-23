@@ -3,6 +3,7 @@ import { clamp, RawPoint, Stroke } from './src/ink'
 let $root = document.getElementById('app')!
 let $svg = $root.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'svg'))
 let $settings = {
+  color: document.getElementById('stroke-color') as HTMLInputElement,
   size: document.getElementById('stroke-size') as HTMLInputElement,
   clear: document.getElementById('clear') as HTMLButtonElement,
   undo: document.getElementById('undo') as HTMLButtonElement,
@@ -15,6 +16,8 @@ $svg.setAttribute('fill', 'currentColor')
 $svg.style.cssText = `display: block; width: 100%; height: 100%;
 font-size: 0; touch-action: none; position: relative; contain: content;
 overflow: hidden; overscroll-behavior: none;`
+
+$settings.color.value = matchMedia('(prefers-color-scheme: dark)').matches ? '#ffffff' : '#000000'
 
 $settings.clear.onclick = () => {
   let current = Array.from($svg.children)
@@ -139,6 +142,7 @@ let onOpen = (id: number, p: RawPoint) => {
   let stroke = Stroke.of([p])
   let $path = $svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'path'))
   $path.style.pointerEvents = 'none'
+  $path.style.fill = $settings.color.value
   strokes[id] = [stroke, $path]
   dirty[id] = true
   render()
@@ -238,3 +242,7 @@ document.onkeydown = (ev) => {
     click($settings.redo)
   }
 }
+
+Object.assign(globalThis, {
+  $settings, $svg, strokes, dirty, undoStack,
+})
