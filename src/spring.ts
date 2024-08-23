@@ -1,20 +1,17 @@
 const enum C {
+  initial = 0.36,
   timespan = 0.016667,
-  stiffness = 0.7,
-  damping = 0.5,
+  stiffness = 0.75,
+  damping = 0.25,
   precision = 0.01,
 }
 
 export class Spring {
-  value = -1
-  last = -1
-  target = -1
+  value = C.initial
+  last = C.initial
+  target = C.initial
   set(target: number): this {
     this.target = target
-    if (this.value < 0) {
-      this.value = target
-      this.last = target
-    }
     return this
   }
   update(dt?: number): number {
