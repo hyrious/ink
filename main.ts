@@ -11,7 +11,12 @@ let $settings = {
   redo: document.getElementById('redo') as HTMLButtonElement,
   pressure: document.getElementById('pressure') as HTMLInputElement,
   eraser: document.getElementById('eraser') as HTMLInputElement,
+  smooth: document.getElementById('smooth') as HTMLSelectElement,
 }
+
+let defaultPressure = $settings.pressure.checked
+let defaultSmooth = $settings.smooth.value
+let defaultSize = $settings.size.valueAsNumber
 
 $svg.setAttribute('fill-rule', 'nonzero')
 $svg.setAttribute('fill', 'currentColor')
@@ -22,7 +27,17 @@ overflow: hidden; overscroll-behavior: none;`
 $mask.style.cssText = `display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
 touch-action: none; contain: content; z-index: 1;`
 
-$settings.color.value = matchMedia('(prefers-color-scheme: dark)').matches ? '#ffffff' : '#000000'
+let matchDark = matchMedia('(prefers-color-scheme: dark)')
+let defaultColor = () => matchDark.matches ? '#ffffff' : '#000000'
+$settings.color.value = defaultColor()
+
+$settings.color.onchange = $settings.color.oninput = () => {
+  refreshUrl()
+}
+
+$settings.size.onchange = $settings.size.oninput = () => {
+  refreshUrl()
+}
 
 $settings.clear.onclick = () => {
   let current = Array.from($svg.children)
@@ -40,12 +55,55 @@ let pressure: 0.5 | undefined
 
 $settings.pressure.oninput = () => {
   pressure = $settings.pressure.checked ? void 0 : 0.5
+  refreshUrl()
+}
+
+$settings.smooth.onchange = $settings.smooth.oninput = () => {
+  refreshUrl()
 }
 
 $settings.eraser.oninput = () => {
   let erasing = $settings.eraser.checked
   $mask.style.cursor = erasing ? `url(https://api.iconify.design/mdi:eraser.svg?color=${encodeURIComponent($settings.color.value)}) 12 32, auto` : 'default'
   $mask.style.display = erasing ? 'block' : 'none'
+}
+
+for (let i = 1; i <= 15; i++) {
+  let $option = document.createElement('option')
+  $option.value = $option.textContent = String(i)
+  $settings.smooth.appendChild($option)
+}
+
+let search = new URL(location.href).searchParams
+if (search.has('color')) {
+  $settings.color.value = search.get('color')!
+}
+if (search.has('size')) {
+  $settings.size.value = search.get('size')!
+}
+if (search.has('pressure')) {
+  $settings.pressure.checked = search.get('pressure') !== '0'
+  $settings.pressure.dispatchEvent(new InputEvent('input'))
+}
+if (search.has('smooth')) {
+  $settings.smooth.value = search.get('smooth')!
+}
+
+let refreshUrl = () => {
+  let replacement = ''
+  if ($settings.color.value !== defaultColor()) {
+    replacement += `&color=${$settings.color.value.slice(1)}`
+  }
+  if ($settings.size.valueAsNumber !== defaultSize) {
+    replacement += `&size=${$settings.size.valueAsNumber}`
+  }
+  if ($settings.pressure.checked !== defaultPressure) {
+    replacement += `&pressure=${$settings.pressure.checked ? 1 : 0}`
+  }
+  if ($settings.smooth.value !== defaultSmooth) {
+    replacement += `&smooth=${$settings.smooth.value}`
+  }
+   history.replaceState({}, "", replacement ? replacement.replace('&', '?') : location.pathname)
 }
 
 let running = new Map<number, PointerEvent>()
@@ -174,7 +232,84 @@ let undoStack = {
   }
 }
 
+interface IQueue<T> {
+  push(item: T): this
+  /// Push the last element again, return undefined if no such element.
+  dup(): this | undefined
+  /// Get computed item.
+  get(): T
+}
+
+class Queue1<T> implements IQueue<T> {
+  item: T | undefined
+
+  push(item: T) {
+    this.item = item
+    return this
+  }
+
+  dup() {
+    if (this.item) return this
+  }
+
+  get() {
+    return this.item!
+  }
+}
+
+class Queue<T> implements IQueue<T> {
+  items: T[] = []
+  size = 0
+
+  constructor(
+    readonly compute: (items: T[]) => T,
+    readonly capacity = 2,
+  ) { }
+
+  push(item: T): this {
+    this.items.push(item)
+    this.size++
+    while (this.size > this.capacity) {
+      this.items.shift()
+      this.size--
+    }
+    return this
+  }
+
+  dup(): this | undefined {
+    if (this.size > 0) {
+      return this.push(this.items[this.items.length - 1])
+    }
+  }
+
+  get(): T {
+    return this.compute(this.items)
+  }
+}
+
+let averagePoint = (ps: RawPoint[]): RawPoint => {
+  // Use average x, y and latest p, t.
+  let sum_x = 0, sum_y = 0, pressure = 0.5, timestamp = 0
+  for (let p of ps) {
+    sum_x += p.x
+    sum_y += p.y
+    pressure = p.p
+    timestamp = p.t
+  }
+  return RawPoint.of(sum_x / ps.length, sum_y / ps.length, pressure, timestamp)
+}
+
+let createQueue = (p: RawPoint): IQueue<RawPoint> => {
+  if ($settings.smooth.value == '0') {
+    return new Queue1<RawPoint>().push(p)
+  } else {
+    let size = Number.parseInt($settings.smooth.value) + 1
+    return new Queue<RawPoint>(averagePoint, size).push(p)
+  }
+}
+
 let strokes: { [id: number]: [Stroke, SVGPathElement] } = {}
+let queue: { [id: number]: IQueue<RawPoint> } = {}
 let dirty: { [id: number]: true } = {}
 
 let onOpen = (id: number, p: RawPoint) => {
@@ -183,13 +318,14 @@ let onOpen = (id: number, p: RawPoint) => {
   $path.style.pointerEvents = 'none'
   $path.style.fill = $settings.color.value
   strokes[id] = [stroke, $path]
+  queue[id] = createQueue(p)
   dirty[id] = true
   render()
 }
 
 let onUpdate = (id: number, p: RawPoint) => {
   if (strokes[id]) {
-    strokes[id][0].push(p)
+    strokes[id][0].push(queue[id].push(p).get())
     dirty[id] = true
     render()
     requestAnimation()
@@ -199,6 +335,7 @@ let onUpdate = (id: number, p: RawPoint) => {
 let onCancel = (id: number) => {
   if (strokes[id]) {
     strokes[id][1].remove()
+    delete queue[id]
     delete strokes[id]
     delete dirty[id]
   }
@@ -213,6 +350,7 @@ let onClose = (id: number) => {
       commit = false
     }
     render()
+    delete queue[id]
     delete dirty[id]
     requestAnimation()
     if (commit) undoStack.commit(
@@ -270,6 +408,8 @@ let updateAnimation = () => {
   render()
   let schedule = false
   for (let id in strokes) {
+    let q = queue[id]?.dup()
+    if (q) strokes[id][0].push(q.get())
     if (strokes[id][0].isSpreading()) {
       dirty[id] = true
       schedule = true

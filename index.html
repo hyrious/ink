@@ -14,7 +14,7 @@
                 display: flex; align-items: center; gap: 5px;
                 user-select: none; -webkit-user-select: none;
                 pointer-events: none }
-    #settings > :is(label, input, button) { pointer-events: auto }
+    #settings > :is(label, input, select, button) { pointer-events: auto }
     :where([type="color" i], [type="range" i]) { border-width: 0; padding: 0; }
   </style>
 </head>
@@ -32,6 +32,10 @@
     <label for="pressure"><ins>P</ins>ressure</label>
     <input id="eraser" type="checkbox">
     <label for="eraser"><ins>E</ins>raser</label>
+    <label for="smooth">Smooth:</label>
+    <select id="smooth">
+      <option selected>0</option>
+    </select>
   </div>
   <script type="module" src="/main.ts"></script>
 </body>
