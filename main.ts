@@ -76,7 +76,7 @@ for (let i = 1; i <= 15; i++) {
 
 let search = new URL(location.href).searchParams
 if (search.has('color')) {
-  $settings.color.value = search.get('color')!
+  $settings.color.value = '#' + search.get('color')!
 }
 if (search.has('size')) {
   $settings.size.value = search.get('size')!
