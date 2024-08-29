@@ -10,11 +10,13 @@ let $settings = {
   undo: document.getElementById('undo') as HTMLButtonElement,
   redo: document.getElementById('redo') as HTMLButtonElement,
   pressure: document.getElementById('pressure') as HTMLInputElement,
+  tail: document.getElementById('tail') as HTMLInputElement,
   eraser: document.getElementById('eraser') as HTMLInputElement,
   smooth: document.getElementById('smooth') as HTMLSelectElement,
 }
 
 let defaultPressure = $settings.pressure.checked
+let defaultTail = $settings.tail.checked
 let defaultSmooth = $settings.smooth.value
 let defaultSize = $settings.size.valueAsNumber
 
@@ -58,6 +60,10 @@ $settings.pressure.oninput = () => {
   refreshUrl()
 }
 
+$settings.tail.oninput = () => {
+  refreshUrl()
+}
+
 $settings.smooth.onchange = $settings.smooth.oninput = () => {
   refreshUrl()
 }
@@ -74,21 +80,6 @@ for (let i = 1; i <= 15; i++) {
   $settings.smooth.appendChild($option)
 }
 
-let search = new URL(location.href).searchParams
-if (search.has('color')) {
-  $settings.color.value = '#' + search.get('color')!
-}
-if (search.has('size')) {
-  $settings.size.value = search.get('size')!
-}
-if (search.has('pressure')) {
-  $settings.pressure.checked = search.get('pressure') !== '0'
-  $settings.pressure.dispatchEvent(new InputEvent('input'))
-}
-if (search.has('smooth')) {
-  $settings.smooth.value = search.get('smooth')!
-}
-
 let refreshUrl = () => {
   let replacement = ''
   if ($settings.color.value !== defaultColor()) {
@@ -100,11 +91,34 @@ let refreshUrl = () => {
   if ($settings.pressure.checked !== defaultPressure) {
     replacement += `&pressure=${$settings.pressure.checked ? 1 : 0}`
   }
+  if ($settings.tail.checked !== defaultTail) {
+    replacement += `&tail=${$settings.tail.checked ? 1 : 0}`
+  }
   if ($settings.smooth.value !== defaultSmooth) {
     replacement += `&smooth=${$settings.smooth.value}`
   }
    history.replaceState({}, "", replacement ? replacement.replace('&', '?') : location.pathname)
 }
+
+let search = new URL(location.href).searchParams
+if (search.has('color')) {
+  $settings.color.value = '#' + search.get('color')!
+}
+if (search.has('size')) {
+  $settings.size.value = search.get('size')!
+}
+if (search.has('pressure')) {
+  $settings.pressure.checked = search.get('pressure') !== '0'
+  $settings.pressure.dispatchEvent(new InputEvent('input'))
+}
+if (search.has('tail')) {
+  $settings.tail.checked = search.get('tail') !== '0'
+  $settings.tail.dispatchEvent(new InputEvent('input'))
+}
+if (search.has('smooth')) {
+  $settings.smooth.value = search.get('smooth')!
+}
+refreshUrl()
 
 let running = new Map<number, PointerEvent>()
 
@@ -195,7 +209,18 @@ $mask.ontouchstart = $mask.ontouchmove = $mask.ontouchend = $mask.ontouchcancel 
   e.stopPropagation()
 }
 
-let undoStack = {
+interface IUndoStack {
+  index: number
+  stack: { undo: () => void, redo: () => void }[]
+  readonly undoable: boolean
+  readonly redoable: boolean
+  commit(undo: () => void, redo: () => void): void
+  undo(): void
+  redo(): void
+  update(): void
+}
+
+let undoStack: IUndoStack = {
   index: 0,
   stack: [],
   get undoable() { return this.index > 0 },
@@ -383,12 +408,14 @@ let onErase = (p: RawPoint) => {
 
 // This happens synchronously, without even a microtask.
 let render = () => {
+  let now = performance.now()
   let size = $settings.size.valueAsNumber
+  let tail = $settings.tail.checked
   for (let id in dirty) {
     if (strokes[id]) {
       let [stroke, $path] = strokes[id], d = ''
       for (let index of stroke.segments) {
-        let outline = stroke.outline(index, size)
+        let outline = stroke.outline(index, size, now, tail)
         d += stroke.stroke(outline)
       }
       $path.setAttribute('d', d)
@@ -439,7 +466,9 @@ document.onkeydown = (ev) => {
     if (code == 219 || code == 221) {
       let size = $settings.size.valueAsNumber, inc = code == 221 ? 5 : -5
       $settings.size.value = '' + clamp(size + inc, +$settings.size.min, +$settings.size.max)
+      $settings.size.dispatchEvent(new InputEvent('input'))
     }
+    if (code === 84) click($settings.tail)
   } else if (primary && !shift && code == 90) {
     click($settings.undo)
   } else if (primary && shift && code == 90) {

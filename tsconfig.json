@@ -1,5 +1,5 @@
 {
-  "include": ["src"],
+  "include": ["src", "main.ts"],
   "extends": "@hyrious/configs/tsconfig.casual.json",
   "compilerOptions": {
     "lib": ["ES2017", "DOM"],

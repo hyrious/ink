@@ -1,15 +1,18 @@
 const enum C {
   initial = 0.36,
   timespan = 0.016667,
-  stiffness = 0.75,
-  damping = 0.25,
+  stiffness = 2,
+  damping = 0.1,
   precision = 0.01,
 }
 
 export class Spring {
-  value = C.initial
-  last = C.initial
-  target = C.initial
+  private value: number
+  private last: number
+  private target: number
+  constructor(value = C.initial) {
+    this.value = this.last = this.target = value
+  }
   set(target: number): this {
     this.target = target
     return this
