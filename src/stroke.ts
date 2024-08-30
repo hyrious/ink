@@ -290,17 +290,30 @@ export class Stroke {
   }
 
   /// Construct an SVG path string from raw points with basic smoothing.
-  stroke(points: IPoint[] = this.points.map(p => p.p)): string {
+  /// If `loop` is `true`, the path will be closed.
+  stroke(points: IPoint[] = this.points.map(p => p.p), loop = false): string {
     let n = points.length
     if (n == 0) return ""
-    let prev = points[0], path = `M${prev.x.toFixed(2)},${prev.y.toFixed(2)}`
-    for (let i = 1; i < n; i++) {
-      let curr = points[i], middle = Vec.from(prev).middle(curr)
-      if (i == 1) path += `L${middle.x.toFixed(2)},${middle.y.toFixed(2)}`
-      else path += `Q${prev.x.toFixed(2)},${prev.y.toFixed(2)} ${middle.x.toFixed(2)},${middle.y.toFixed(2)}`
-      prev = curr
+    let prev = points[0], path = '', curr: IPoint, middle: IPoint
+    if (loop) {
+      middle = Vec.from(prev).middle(points[n - 1])
+      path += `M${middle.x.toFixed(2)},${middle.y.toFixed(2)}`
+      for (let i = 1; i < n; i++) {
+        curr = points[i], middle = Vec.from(prev).middle(curr)
+        path += `Q${prev.x.toFixed(2)},${prev.y.toFixed(2)} ${middle.x.toFixed(2)},${middle.y.toFixed(2)}`
+        prev = curr
+      }
+      if (n > 1) path += 'Z'
+    } else {
+      path += `M${prev.x.toFixed(2)},${prev.y.toFixed(2)}`
+      for (let i = 1; i < n; i++) {
+        curr = points[i], middle = Vec.from(prev).middle(curr)
+        if (i == 1) path += `L${middle.x.toFixed(2)},${middle.y.toFixed(2)}`
+        else path += `Q${prev.x.toFixed(2)},${prev.y.toFixed(2)} ${middle.x.toFixed(2)},${middle.y.toFixed(2)}`
+        prev = curr
+      }
+      if (n > 1) path += `L${prev.x.toFixed(2)},${prev.y.toFixed(2)}`
     }
-    if (n > 1) path += `L${prev.x.toFixed(2)},${prev.y.toFixed(2)}`
     return path
   }
 

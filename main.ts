@@ -416,7 +416,7 @@ let render = () => {
       let [stroke, $path] = strokes[id], d = ''
       for (let index of stroke.segments) {
         let outline = stroke.outline(index, size, now, tail)
-        d += stroke.stroke(outline)
+        d += stroke.stroke(outline, true)
       }
       $path.setAttribute('d', d)
     }
