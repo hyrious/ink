@@ -1,3 +1,4 @@
+import { resolve } from 'path'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
@@ -7,6 +8,12 @@ export default defineConfig({
     modulePreload: {
       polyfill: false
     },
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        raw: resolve(__dirname, 'raw.html'),
+      }
+    }
   },
   define: {
     '__DEV__': 'true',

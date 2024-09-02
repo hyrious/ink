@@ -413,9 +413,10 @@ let render = () => {
   let tail = $settings.tail.checked
   for (let id in dirty) {
     if (strokes[id]) {
+      let isRunning = running.has(+id)
       let [stroke, $path] = strokes[id], d = ''
       for (let index of stroke.segments) {
-        let outline = stroke.outline(index, size, now, tail)
+        let outline = stroke.outline(index, size, now, !isRunning && tail)
         d += stroke.stroke(outline, true)
       }
       $path.setAttribute('d', d)
