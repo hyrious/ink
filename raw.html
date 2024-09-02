@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<!--
+  This page is used to test raw input on different devices.
+  Each `PointerEvent` will be drawn as a circle with its pressure value as radius.
+  Predicted events will be drawn in a different color.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Raw Input</title>
+  <meta name="color-scheme" content="light dark">
+  <style>
+    html, body, #app {
+      display: flex;
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      font-size: 0;
+      overflow: hidden;
+      touch-action: none;
+      contain: content;
+      overscroll-behavior: none;
+    }
+    path {
+      pointer-events: none;
+    }
+  </style>
+  <script type="module" crossorigin src="./assets/raw-C-48oq6y.js"></script>
+</head>
+<body>
+  <svg id="app" stroke="currentcolor" fill="none"></svg>
+</body>
+</html>
