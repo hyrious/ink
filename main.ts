@@ -9,6 +9,8 @@ let $settings = {
   clear: document.getElementById('clear') as HTMLButtonElement,
   undo: document.getElementById('undo') as HTMLButtonElement,
   redo: document.getElementById('redo') as HTMLButtonElement,
+  save: document.getElementById('save') as HTMLButtonElement,
+  load: document.getElementById('load') as HTMLButtonElement,
   pressure: document.getElementById('pressure') as HTMLInputElement,
   tail: document.getElementById('tail') as HTMLInputElement,
   eraser: document.getElementById('eraser') as HTMLInputElement,
@@ -52,6 +54,66 @@ $settings.clear.onclick = () => {
 
 $settings.undo.onclick = () => undoStack.undo()
 $settings.redo.onclick = () => undoStack.redo()
+
+declare function showSaveFilePicker(options?: any): Promise<any>
+declare function showOpenFilePicker(options?: any): Promise<any>
+
+$settings.save.onclick = async () => {
+  let json: any = []
+  for (const $path of $svg.children as unknown as SVGPathElement[]) {
+    let i = Number.parseInt($path.dataset.index ?? '')
+    json.push(allStrokes[i])
+  }
+  // TODO: perf: 1) lower precision 2) convert timeStamp to relative number so it will be smaller.
+  let data = JSON.stringify(json)
+  $settings.save.disabled = true
+  let handle = await showSaveFilePicker({
+    id: 'ink',
+    startIn: 'downloads',
+    suggestedName: 'ink.json',
+  }).catch(console.warn)
+  if (handle) {
+    let w = await handle.createWritable().catch(console.warn)
+    if (w) {
+      await w.write(data)
+      await w.close()
+    }
+  }
+  $settings.save.disabled = false
+}
+
+$settings.load.onclick = async () => {
+  let [handle] = await showOpenFilePicker({
+    id: 'ink',
+    startIn: 'downloads',
+  }).catch(e => (console.warn(e), []))
+  if (handle) {
+    let file = await handle.getFile().catch(console.warn)
+    if (file) {
+      let data: any
+      try { data = JSON.parse(await file.text()) }
+      catch (e) { console.warn(e) }
+
+      if (data && Array.isArray(data)) {
+        $settings.clear.click();
+
+        let i = 101
+        for (let json of data) {
+          let stroke = Stroke.fromJSON(json)
+          let $path = $svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'path'))
+          $path.style.pointerEvents = 'none'
+          $path.style.fill = $settings.color.value
+          $path.dataset.index = String(allStrokes.push(stroke) - 1)
+          strokes[i] = [stroke, $path]
+          dirty[i] = true
+          i++
+        }
+        render()
+        for (let j = 101; j < i; j++) delete strokes[j]
+      }
+    }
+  }
+}
 
 let pressure: 0.5 | undefined
 
@@ -333,9 +395,12 @@ let createQueue = (p: RawPoint): IQueue<RawPoint> => {
   }
 }
 
+// The `id` is `ev.pointerId`, so it will overwrite previous data.
 let strokes: { [id: number]: [Stroke, SVGPathElement] } = {}
 let queue: { [id: number]: IQueue<RawPoint> } = {}
 let dirty: { [id: number]: true } = {}
+// This stores all closed strokes.
+let allStrokes: Stroke[] = []
 
 let onOpen = (id: number, p: RawPoint) => {
   let stroke = Stroke.of([p])
@@ -383,6 +448,9 @@ let onClose = (id: number) => {
       // The z-index is not correct, but this demo does not care about it.
       () => $svg.append($path),
     )
+    if (commit) {
+      $path.dataset.index = String(allStrokes.push(stroke) - 1)
+    }
   }
 }
 
@@ -408,7 +476,7 @@ let onErase = (p: RawPoint) => {
 
 // This happens synchronously, without even a microtask.
 let render = () => {
-  let now = performance.now()
+  let now = performance.timeOrigin + performance.now()
   let size = $settings.size.valueAsNumber
   let tail = $settings.tail.checked
   for (let id in dirty) {
@@ -474,9 +542,13 @@ document.onkeydown = (ev) => {
     click($settings.undo)
   } else if (primary && shift && code == 90) {
     click($settings.redo)
+  } else if (primary && !shift && code == 83) {
+    click($settings.save)
+  } else if (primary && !shift && code == 79) {
+    click($settings.load)
   }
 }
 
 Object.assign(globalThis, {
-  $settings, $svg, strokes, dirty, undoStack,
+  $settings, $svg, strokes, dirty, undoStack, allStrokes,
 })

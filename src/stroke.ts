@@ -35,7 +35,7 @@ export class RawPoint implements IPoint {
   /// for draw boards supporting pinch and zoom. Use {@link RawPoint.of} instead.
   static fromEvent(event: PointerEvent, pressure = clamp(event.pressure || 0.5, 0, 1)) {
     // Some stylus devices may report zero pressure, treat as no-pressure.
-    return new RawPoint(event.clientX, event.clientY, pressure, event.timeStamp);
+    return new RawPoint(event.clientX, event.clientY, pressure, performance.timeOrigin + event.timeStamp);
   }
 
   /// @internal
@@ -194,7 +194,7 @@ export class Stroke {
   }
 
   /// Is the stroke still "spreading"?
-  isSpreading(now = performance.now()): boolean {
+  isSpreading(now = performance.timeOrigin + performance.now()): boolean {
     return this.points.length > 0 && now - this.points[this.points.length - 1].p.t < C.SpreadInterval
   }
 
@@ -202,7 +202,7 @@ export class Stroke {
   /// Returns an empty array if `from` is not in {@link Stroke.segments}.
   /// The `size` is the full width when pressure is 1.
   /// If the `tail` is true, it will simulate a thin tail when the last segment is long enough.
-  outline(from: number, size: number, now = performance.now(), tail = true): IPoint[] {
+  outline(from: number, size: number, now = performance.timeOrigin + performance.now(), tail = true): IPoint[] {
     let end = this.segments.find(end => from < end)
     let points = this.points.slice(from > 0 ? from - 1 : from, end)
     if (points.length > 1) {
