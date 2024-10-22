@@ -1,5 +1,5 @@
 {
-  "exclude": ["scripts"],
+  "exclude": ["scripts", "vite.config.ts"],
   "extends": "@hyrious/configs/tsconfig.casual.json",
   "compilerOptions": {
     "lib": ["ES2017", "DOM"],

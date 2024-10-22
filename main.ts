@@ -58,13 +58,36 @@ $settings.redo.onclick = () => undoStack.redo()
 declare function showSaveFilePicker(options?: any): Promise<any>
 declare function showOpenFilePicker(options?: any): Promise<any>
 
+let round = (value: number) => {
+  return Math.round((value + Number.EPSILON) * 100) / 100
+}
+
 $settings.save.onclick = async () => {
   let json: any = []
   for (const $path of $svg.children as unknown as SVGPathElement[]) {
     let i = Number.parseInt($path.dataset.index ?? '')
     json.push(allStrokes[i])
   }
-  // TODO: perf: 1) lower precision 2) convert timeStamp to relative number so it will be smaller.
+  json = structuredClone(json)
+  sessionStorage.setItem('ink', JSON.stringify(json))
+  // PERF 1: Lower precision of points.
+  let t0 = 0, t1 = 0
+  for (let stroke of json) {
+    stroke.length = round(stroke.length)
+    for (let p of stroke.points) {
+      p.d = round(p.d)
+      p.l = round(p.l)
+      p.v.x = round(p.v.x)
+      p.v.y = round(p.v.y)
+      p.p.x = round(p.p.x)
+      p.p.y = round(p.p.y)
+      p.p.p = round(p.p.p)
+      // PERF 2: use relative timestamp.
+      t1 = p.p.t
+      p.p.t = round(t1 - t0)
+      t0 = t1
+    }
+  }
   let data = JSON.stringify(json)
   $settings.save.disabled = true
   let handle = await showSaveFilePicker({
@@ -97,8 +120,14 @@ $settings.load.onclick = async () => {
       if (data && Array.isArray(data)) {
         $settings.clear.click();
 
-        let i = 101
+        let i = 101, t0 = 0
         for (let json of data) {
+          // PERF 2: restore timestamp.
+          for (let p of json.points) {
+            p.p.t += t0
+            t0 = p.p.t
+          }
+
           let stroke = Stroke.fromJSON(json)
           let $path = $svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'path'))
           $path.style.pointerEvents = 'none'
@@ -114,6 +143,27 @@ $settings.load.onclick = async () => {
     }
   }
 }
+
+// Restore from session storage.
+setTimeout(() => {
+  let data = JSON.parse(sessionStorage.getItem('ink') ?? '[]')
+  if (data && Array.isArray(data)) {
+    $settings.clear.click();
+    let i = 101
+    for (let json of data) {
+      let stroke = Stroke.fromJSON(json)
+      let $path = $svg.appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'path'))
+      $path.style.pointerEvents = 'none'
+      $path.style.fill = $settings.color.value
+      $path.dataset.index = String(allStrokes.push(stroke) - 1)
+      strokes[i] = [stroke, $path]
+      dirty[i] = true
+      i++
+    }
+    render()
+    for (let j = 101; j < i; j++) delete strokes[j]
+  }
+})
 
 let pressure: 0.5 | undefined
 
@@ -491,7 +541,18 @@ let render = () => {
     }
     delete dirty[id]
   }
+  clearTimeout(session)
+  session = setTimeout(() => {
+    let json: any = []
+    for (const $path of $svg.children as unknown as SVGPathElement[]) {
+      let i = Number.parseInt($path.dataset.index ?? '')
+      json.push(allStrokes[i])
+    }
+    sessionStorage.setItem('ink', JSON.stringify(json))
+  }, 1000)
 }
+
+let session = 0
 
 let animateId = 0
 
